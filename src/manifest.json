@@ -59,6 +59,9 @@
 			},
 			"description": "Open alt-tab-style popup"
 		},
+		"011-open-popup-window-up": {
+			"description": "Open alt-tab-style popup (reverse direction)"
+		},
 		"020-focus-search": {
 			"suggested_key": {
 				"default": "Alt+W",

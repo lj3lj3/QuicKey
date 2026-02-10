@@ -22,6 +22,7 @@ const RestartDelay = 60 * 1000;
 const TabActivatedOnStartupDelay = 750;
 const {
 	OpenPopupCommand,
+	OpenPopupUpCommand,
 	PreviousTabCommand,
 	NextTabCommand,
 	ToggleTabsCommand,
@@ -188,6 +189,12 @@ function handleCommand(
 				.finally(() => openPopupWindow(command === FocusPopupCommand));
 			break;
 
+		case OpenPopupUpCommand:
+				// reverse direction: open popup and move selection UP
+			lastOpenPromise = lastOpenPromise
+				.finally(() => openPopupWindow(false, -1));
+			break;
+
 		case PreviousTabCommand:
 		case NextTabCommand:
 			lastTogglePromise = lastTogglePromise
@@ -220,7 +227,8 @@ function sendPopupMessage(
 
 
 async function openPopupWindow(
-	focusSearch = false)
+	focusSearch = false,
+	direction = 1)
 {
 		// we used to set activeTab directly here, and then change it back to the
 		// previous value in the last branch below.  that caused issues when we
@@ -258,8 +266,8 @@ async function openPopupWindow(
 	}
 
 		// the popup is open and focused, so use the shortcut to move the
-		// selection DOWN
-	if (sendPopupMessage("modifySelected", { direction: 1 })) {
+		// selection in the specified direction
+	if (sendPopupMessage("modifySelected", { direction })) {
 			// an error was returned from sending the message, so close
 			// the popup
 		return popupWindow.close();
