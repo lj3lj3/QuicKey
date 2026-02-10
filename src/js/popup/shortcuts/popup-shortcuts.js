@@ -72,6 +72,7 @@ const ShiftShortcuts = {
 };
 const {
 	OpenPopupCommand,
+	OpenPopupUpCommand,
 	FocusPopupCommand,
 	PreviousTabCommand,
 	NextTabCommand
@@ -160,7 +161,8 @@ export default {
 			joinKeys(popupModifiers.concat("shift"), mruSelectKey),
 			findShortcut(chromeShortcuts, NextTabCommand),
 			createShiftedShortcut(chromeShortcuts, OpenPopupCommand),
-			createShiftedShortcut(chromeShortcuts, FocusPopupCommand)
+			createShiftedShortcut(chromeShortcuts, FocusPopupCommand),
+			findShortcut(chromeShortcuts, OpenPopupUpCommand)
 		];
 
 			// first reset all the bindings, in case we're getting called

@@ -19,6 +19,8 @@ To toggle between the two most recently used tabs, quickly press the keyboard sh
 
 With a little extra work, you can even make *QuicKey* respond to the Holy Grail of keyboard shortcuts: <b><kbd>ctrl</kbd><kbd>tab</kbd></b>.  [Learn how](ctrl-tab).
 
+*QuicKey* also supports <b><kbd>ctrl</kbd><kbd>shift</kbd><kbd>tab</kbd></b> to navigate in the **reverse direction** (moving up through the MRU list), just like <b><kbd>alt</kbd><kbd>shift</kbd><kbd>tab</kbd></b> works in your OS.  This requires binding the `011-open-popup-window-up` command via the DevTools API.  See the [implementation details](doc/ctrl-shift-tab-reverse-impl.md) for setup instructions.
+
 
 ## Installation
 
@@ -57,6 +59,7 @@ Opening *QuicKey* displays a list of the last 50 tabs you've visited, in order o
     * Press the shortcut but keep holding the <kbd>alt</kbd> key (<kbd>ctrl</kbd> key on macOS).
     * Press <kbd>W</kbd> or <kbd>↓</kbd> to move down through the list of recent tabs.
     * Press <b><kbd>shift</kbd><kbd>W</kbd></b> or <kbd>↑</kbd> to move up.
+    * If using <b><kbd>ctrl</kbd><kbd>tab</kbd></b>, press <b><kbd>ctrl</kbd><kbd>shift</kbd><kbd>tab</kbd></b> to move up (reverse direction).
     * Release <kbd>alt</kbd> (or <kbd>ctrl</kbd>) to switch to the selected tab.
     * You can also highlight an item with the mouse, then release <kbd>alt</kbd> to go to that tab.
 

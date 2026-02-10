@@ -36,6 +36,7 @@ export const ResultsListRowHeight = 45;
 export const CommandIDs = {
 	OpenMenuCommand: "_execute_action",
 	OpenPopupCommand: "010-open-popup-window",
+	OpenPopupUpCommand: "011-open-popup-window-up",
 	FocusPopupCommand: "020-focus-search",
 	PreviousTabCommand: "1-previous-tab",
 	NextTabCommand: "2-next-tab",
