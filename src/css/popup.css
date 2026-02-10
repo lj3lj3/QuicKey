@@ -96,7 +96,8 @@
 }
 
 html, body {
-	width: 500px;
+	width: 100%;
+	min-width: 500px;
 	margin: 0;
 	padding: 0;
 		/* prevent the flash of a scrollbar that briefly appears when the popup
@@ -158,7 +159,7 @@ img {
 .search-box input, .command-placeholder {
 	font-size: 14px;
 	font-weight: bold;
-	width: 490px;
+	width: calc(100% - 10px);
 	height: 25px;
 	margin: 5px;
 	padding: 2px 22px 5px 28px;
@@ -310,7 +311,7 @@ img {
 .results-list-item {
 	margin: 0;
 	padding: 4px 6px 5px 28px;
-	max-width: 490px;
+	max-width: 100%;
 	background-position: 6px 6px;
 	background-size: 16px 16px;
 	background-repeat: no-repeat;

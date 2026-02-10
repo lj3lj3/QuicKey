@@ -7,8 +7,14 @@ import {IsFirefox, ResultsListRowHeight} from "@/background/constants";
 	// in FF, the scrollbar appears inside the right edge of the scrolling
 	// area, instead on the outside.  so make the virtual list go right to
 	// the edge of the popup, so the scrollbar doesn't cover the content.
-const Width = IsFirefox ? 495 : 490;
+const ScrollbarPadding = IsFirefox ? 5 : 10;
 const MinShownTime = 200;
+
+
+function getListWidth()
+{
+	return document.body.clientWidth - ScrollbarPadding;
+}
 
 
 export default class ResultsList extends React.Component {
@@ -17,6 +23,28 @@ export default class ResultsList extends React.Component {
     list = null;
 	renderTimer = null;
 	hoverSelectEnabled = false;
+	listWidth = getListWidth();
+
+
+	componentDidMount()
+	{
+		this.handleResize = () => {
+			const newWidth = getListWidth();
+
+			if (newWidth !== this.listWidth) {
+				this.listWidth = newWidth;
+				this.forceUpdate();
+			}
+		};
+
+		window.addEventListener("resize", this.handleResize);
+	}
+
+
+	componentWillUnmount()
+	{
+		window.removeEventListener("resize", this.handleResize);
+	}
 
 
 	componentDidUpdate(
@@ -163,7 +191,7 @@ export default class ResultsList extends React.Component {
 				ref={this.handleListRef}
 				className="results-list"
 				tabIndex={-1}
-				width={Width}
+				width={this.listWidth}
 				height={height}
 				rowCount={itemCount}
 				rowHeight={ResultsListRowHeight}
