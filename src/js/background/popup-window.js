@@ -9,7 +9,6 @@ const {Behind, Tab, Minimize} = HidePopupBehavior;
 
 
 const { receive } = connect("popup-window");
-let popupAdjustmentWidth = 0;
 let popupAdjustmentHeight = 0;
 let currentWidth = PopupInnerWidth;
 let currentHeight = PopupInnerHeight;
@@ -21,8 +20,8 @@ let lastActiveTab;
 
 
 await storage.get((data = {}) => {
-	({ popupAdjustmentWidth = 0, popupAdjustmentHeight = 0 } = data);
-	currentWidth = PopupInnerWidth + popupAdjustmentWidth;
+	({ popupAdjustmentHeight = 0 } = data);
+	currentWidth = PopupInnerWidth;
 	currentHeight = PopupInnerHeight + popupAdjustmentHeight;
 });
 
@@ -155,28 +154,23 @@ async function create(
 	}
 
 	const [popupTab] = window.tabs;
-	const {width: innerWidth, height: innerHeight} = popupTab;
-	const widthDelta = PopupInnerWidth - innerWidth;
+	const {height: innerHeight} = popupTab;
 	const heightDelta = PopupInnerHeight - innerHeight;
 
-	if (widthDelta || heightDelta) {
-			// the current adjustments weren't enough to hit the target size,
-			// so update them with the latest deltas, and then adjust the
+	if (heightDelta) {
+			// the current adjustment wasn't enough to hit the target size,
+			// so update it with the latest delta, and then adjust the
 			// popup size
-		popupAdjustmentWidth += widthDelta;
 		popupAdjustmentHeight += heightDelta;
-		bounds.width += widthDelta;
 		bounds.height += heightDelta;
-		currentWidth = bounds.width;
 		currentHeight = bounds.height;
 
 			// shift the position by half a negative delta to keep the
 			// window centered in the target area
-		bounds.left += -Math.floor(widthDelta / 2);
 		bounds.top += -Math.floor(heightDelta / 2);
 
 		await chrome.windows.update(window.id, bounds);
-		await storage.set(() => ({ popupAdjustmentWidth, popupAdjustmentHeight }));
+		await storage.set(() => ({ popupAdjustmentHeight }));
 	}
 
 	lastActiveTab = activeTab;

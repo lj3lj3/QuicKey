@@ -1242,15 +1242,17 @@ export default class App extends React.Component {
 				// always the same.
 			this.reopenWindow();
 			warn("=== borders collapsed");
-		} else if (!this.ignoreNextResize &&
-				(notEqual(outerWidth, this.popupW) || notEqual(outerHeight, this.popupH))) {
-				// prevent the window from resizing, but only if the width
-				// or height have actually changed, since we sometimes
-				// get resize events when the size is the same
-			this.ignoreNextResize = true;
-			popupWindow.resize(this.popupW, this.popupH);
+		} else if (!this.ignoreNextResize) {
+				// allow the width to change freely, but prevent unwanted
+				// height changes
+			this.popupW = outerWidth;
 
-			return;
+			if (notEqual(outerHeight, this.popupH)) {
+				this.ignoreNextResize = true;
+				popupWindow.resize(this.popupW, this.popupH);
+
+				return;
+			}
 		}
 
 		this.ignoreNextResize = false;
