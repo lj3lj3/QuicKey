@@ -889,3 +889,101 @@ label b, .label b {
 	margin-top: .25em;
 	cursor: pointer;
 }
+
+
+/* ===========================================================================
+	Unlimited History
+   =========================================================================== */
+
+.unlimited-history-controls {
+	margin-top: 1em;
+	padding-left: .5em;
+}
+
+.unlimited-history-controls h3 {
+	margin: 1.5em 0 .25em 0;
+	font-size: .95em;
+}
+
+.unlimited-history-controls .subtitle {
+	color: #666;
+	font-size: .85em;
+	margin: .25em 0 .5em 0;
+	line-height: 1.4;
+}
+
+.history-stats {
+	display: flex;
+	align-items: center;
+	gap: .5em;
+	margin-bottom: .5em;
+}
+
+.history-stats .label {
+	font-weight: 500;
+}
+
+.history-stats .value {
+	font-weight: bold;
+	font-size: 1.1em;
+}
+
+.history-stats .refresh-btn {
+	font-size: .9em;
+	padding: .1em .5em;
+	min-width: auto;
+}
+
+.import-result {
+	margin-top: .5em;
+	padding: .5em .75em;
+	border-radius: 4px;
+	font-size: .85em;
+}
+
+.import-result.success {
+	background: #e8f5e9;
+	color: #2e7d32;
+}
+
+.import-result.error {
+	background: #ffebee;
+	color: #c62828;
+}
+
+.history-storage-info .subtitle {
+	font-style: italic;
+}
+
+.history-storage-info .subtitle.storage-path {
+	font-style: normal;
+	padding: .5em .75em;
+	background: #f5f5f5;
+	border-radius: 4px;
+	overflow-x: auto;
+	word-break: break-all;
+}
+
+.history-storage-info .subtitle.storage-path code {
+	font-size: .85em;
+}
+
+@media (prefers-color-scheme: dark) {
+	.import-result.success {
+		background: #1b5e20;
+		color: #a5d6a7;
+	}
+
+	.import-result.error {
+		background: #b71c1c;
+		color: #ef9a9a;
+	}
+
+	.unlimited-history-controls .subtitle {
+		color: #aaa;
+	}
+
+	.history-storage-info .subtitle.storage-path {
+		background: #333;
+	}
+}

@@ -42,7 +42,7 @@ You can customize the shortcut key by right-clicking the *QuicKey* icon and sele
 
 ## <a name="mru"></a>Switch between the most recently used tabs
 
-> **Note:** If you've been using *QuicKey* before 2.0, you'll need to set keyboard shortcuts for the new commands that show the popup window, as they won't be set by default. 
+> **Note:** If you've been using *QuicKey* before 2.0, you'll need to set keyboard shortcuts for the new commands that show the popup window, as they won't be set by default.
 
 Opening *QuicKey* displays a list of the last 50 tabs you've visited, in order of recency.  (When you first start using *QuicKey*, though, it won't know what's recent, so the list will be empty.)  Click a tab to switch to it, or use one of the keyboard shortcuts below to navigate the recently used tab history:
 

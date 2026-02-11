@@ -8,6 +8,7 @@ import storage from "@/background/quickey-storage";
 import settings from "@/background/settings";
 import trackers from "@/background/page-trackers";
 import { debounce } from "@/background/debounce";
+import historyDB from "@/background/history-db";
 import * as k from "@/background/constants";
 
 if (globalThis.DEBUG) {
@@ -64,6 +65,7 @@ let lastTogglePromise = Promise.resolve();
 let lastOpenPromise = Promise.resolve();
 let currentWindowLimitRecents = false;
 let navigateRecentsWithPopup = false;
+let enableUnlimitedHistory = false;
 let navigatingRecents = false;
 let activeTab;
 let lastWindowID;
@@ -458,6 +460,24 @@ chrome.tabs.onReplaced.addListener((newID, oldID) => {
 });
 
 
+chrome.history.onVisited.addListener(item => {
+	if (enableUnlimitedHistory) {
+		historyDB.addVisit(item);
+	}
+});
+
+
+chrome.history.onVisitRemoved.addListener(removed => {
+	if (enableUnlimitedHistory) {
+		if (removed.allHistory) {
+			historyDB.clear();
+		} else if (removed.urls) {
+			removed.urls.forEach(url => historyDB.remove(url));
+		}
+	}
+});
+
+
 	// the onActivated event isn't fired when the user switches between
 	// windows, so get the active tab in this window and store it
 chrome.windows.onFocusChanged.addListener(windowID => {
@@ -579,6 +599,12 @@ chrome.runtime.onMessage.addListener(({message, ...payload}, sender, sendRespons
 			popupWindow.hideBehavior = value;
 		} else if (key == k.NavigateRecentsWithPopup.Key) {
 			navigateRecentsWithPopup = value;
+		} else if (key == k.EnableUnlimitedHistory.Key) {
+			enableUnlimitedHistory = value;
+
+			if (value) {
+				historyDB.init();
+			}
 		}
 	}
 
@@ -643,6 +669,11 @@ storage.set(data => {
 			currentWindowLimitRecents = settings[k.CurrentWindowLimitRecents.Key];
 			popupWindow.hideBehavior = settings[k.HidePopupBehavior.Key];
 			navigateRecentsWithPopup = settings[k.NavigateRecentsWithPopup.Key];
+			enableUnlimitedHistory = settings[k.EnableUnlimitedHistory.Key];
+
+			if (enableUnlimitedHistory) {
+				historyDB.init();
+			}
 		});
 
 	return {

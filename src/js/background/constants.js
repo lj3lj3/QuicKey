@@ -91,6 +91,9 @@ export const CurrentWindowLimitSearch = {
 export const NavigateRecentsWithPopup = {
 	Key: "navigateRecentsWithPopup"
 };
+export const EnableUnlimitedHistory = {
+	Key: "enableUnlimitedHistory"
+};
 export const Shortcuts = {
 	Key: "shortcuts",
 	MRUSelect: "mruSelect",

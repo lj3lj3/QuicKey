@@ -110,6 +110,7 @@ const Updaters = {
 	{
 		data.colorScheme = "light";
 	}),
+	14: update(addDefaultSetting(k.EnableUnlimitedHistory)),
 };
 	// calculate the version by incrementing the highest key in the
 	// Updaters hash, so that the version is automatically increased
