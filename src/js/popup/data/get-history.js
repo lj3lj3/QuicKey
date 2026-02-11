@@ -2,6 +2,7 @@ import decode from "@/lib/decode";
 import addURLs from "./add-urls";
 import {addPinyin} from "./add-pinyin";
 import historyDB from "@/background/history-db";
+import {calculateFrecencyBoost} from "../score/frecency";
 
 
 const RequestedItemCount = 2000;
@@ -125,11 +126,22 @@ function getHistoryFromChromeAPI(
 
 export default function getHistory(
 	usePinyin,
-	useUnlimitedHistory)
+	useUnlimitedHistory,
+	enableEnhancedSearch)
 {
-	if (useUnlimitedHistory) {
-		return getHistoryFromDB(usePinyin);
-	}
+	const promise = useUnlimitedHistory
+		? getHistoryFromDB(usePinyin)
+		: getHistoryFromChromeAPI(usePinyin);
 
-	return getHistoryFromChromeAPI(usePinyin);
+	return promise.then(items => {
+		if (enableEnhancedSearch) {
+			items.forEach(item => {
+				if (item.visitCount && item.lastVisitTime) {
+					item.recentBoost = calculateFrecencyBoost(item);
+				}
+			});
+		}
+
+		return items;
+	});
 }

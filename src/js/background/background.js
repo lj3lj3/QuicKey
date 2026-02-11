@@ -66,6 +66,7 @@ let lastOpenPromise = Promise.resolve();
 let currentWindowLimitRecents = false;
 let navigateRecentsWithPopup = false;
 let enableUnlimitedHistory = false;
+let enableEnhancedSearch = false;
 let navigatingRecents = false;
 let activeTab;
 let lastWindowID;
@@ -599,12 +600,14 @@ chrome.runtime.onMessage.addListener(({message, ...payload}, sender, sendRespons
 			popupWindow.hideBehavior = value;
 		} else if (key == k.NavigateRecentsWithPopup.Key) {
 			navigateRecentsWithPopup = value;
-		} else if (key == k.EnableUnlimitedHistory.Key) {
+	} else if (key == k.EnableUnlimitedHistory.Key) {
 			enableUnlimitedHistory = value;
 
 			if (value) {
 				historyDB.init();
 			}
+		} else if (key == k.EnableEnhancedSearch.Key) {
+			enableEnhancedSearch = value;
 		}
 	}
 
@@ -670,6 +673,7 @@ storage.set(data => {
 			popupWindow.hideBehavior = settings[k.HidePopupBehavior.Key];
 			navigateRecentsWithPopup = settings[k.NavigateRecentsWithPopup.Key];
 			enableUnlimitedHistory = settings[k.EnableUnlimitedHistory.Key];
+			enableEnhancedSearch = settings[k.EnableEnhancedSearch.Key];
 
 			if (enableUnlimitedHistory) {
 				historyDB.init();

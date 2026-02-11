@@ -1,5 +1,5 @@
 const DB_NAME = "QuicKeyHistory";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_NAME = "history";
 const META_STORE = "meta";
 const META_INITIALIZED = "initialized";
@@ -10,11 +10,27 @@ const InitialImportLoopCount = 2;
 let db = null;
 
 
+function isDBValid(database)
+{
+	try {
+		// verify the connection is still usable by checking objectStoreNames
+		return database
+			&& typeof database.objectStoreNames !== "undefined"
+			&& database.objectStoreNames.contains(STORE_NAME);
+	} catch (e) {
+		return false;
+	}
+}
+
+
 function openDB()
 {
-	if (db) {
+	if (db && isDBValid(db)) {
 		return Promise.resolve(db);
 	}
+
+	// clear stale reference
+	db = null;
 
 	return new Promise((resolve, reject) => {
 		const request = indexedDB.open(DB_NAME, DB_VERSION);
@@ -28,22 +44,57 @@ function openDB()
 				store.createIndex("byTime", "lastVisitTime", { unique: false });
 			}
 
-			if (!database.objectStoreNames.contains(META_STORE)) {
-				database.createObjectStore(META_STORE, { keyPath: "name" });
-			}
-		};
+		if (!database.objectStoreNames.contains(META_STORE)) {
+			database.createObjectStore(META_STORE, { keyPath: "name" });
+		}
+
+			// new store for adaptive history (version 2)
+		if (!database.objectStoreNames.contains("inputHistory")) {
+			const ahStore = database.createObjectStore("inputHistory", {
+				keyPath: "id"
+			});
+			ahStore.createIndex("byInput", "input", { unique: false });
+			ahStore.createIndex("byLastUsed", "lastUsed", { unique: false });
+			ahStore.createIndex("byMode", "mode", { unique: false });
+		}
+	};
 
 		request.onsuccess = (event) => {
 			db = event.target.result;
 
 			db.onclose = () => { db = null; };
+			db.onversionchange = () => { db.close(); db = null; };
 
 			resolve(db);
 		};
 
 		request.onerror = (event) => {
-			console.error("Failed to open IndexedDB:", event.target.error);
-			reject(event.target.error);
+			const error = event.target.error;
+
+			if (error?.name === "VersionError") {
+				// The existing DB has a higher version (e.g. from a newer
+				// extension build).  Open without specifying a version so
+				// we connect to whatever version already exists.
+				console.warn("[history-db] VersionError: retrying without version constraint");
+				const retryRequest = indexedDB.open(DB_NAME);
+
+				retryRequest.onupgradeneeded = request.onupgradeneeded;
+
+				retryRequest.onsuccess = (e) => {
+					db = e.target.result;
+					db.onclose = () => { db = null; };
+					db.onversionchange = () => { db.close(); db = null; };
+					resolve(db);
+				};
+
+				retryRequest.onerror = (e) => {
+					console.error("[history-db] Retry also failed:", e.target.error?.message || e.target.error);
+					reject(e.target.error);
+				};
+			} else {
+				console.error("[history-db] Failed to open IndexedDB:", error?.message || error);
+				reject(error);
+			}
 		};
 	});
 }
@@ -202,9 +253,9 @@ const historyDB = {
 					return openDB().then(importFromChromeHistory);
 				}
 			})
-			.catch(error => {
-				console.error("[history-db] Init failed:", error);
-			});
+		.catch(error => {
+			console.error("[history-db] Init failed:", error?.message || error);
+		});
 	},
 
 
@@ -248,9 +299,10 @@ const historyDB = {
 					tx.onerror = () => reject(tx.error);
 				});
 			})
-			.catch(error => {
-				console.error("[history-db] addVisit failed:", error);
-			});
+		.catch(error => {
+			db = null;
+			console.error("[history-db] addVisit failed:", error?.message || error);
+		});
 	},
 
 
@@ -280,11 +332,12 @@ maxResults = 1000)
 					cursorRequest.onerror = () => reject(cursorRequest.error);
 				});
 			})
-			.catch(error => {
-				console.error("[history-db] search failed:", error);
+		.catch(error => {
+			db = null;
+			console.error("[history-db] search failed:", error?.message || error);
 
-				return [];
-			});
+			return [];
+		});
 	},
 
 
@@ -302,9 +355,10 @@ maxResults = 1000)
 					request.onerror = () => reject(request.error);
 				});
 			})
-			.catch(error => {
-				console.error("[history-db] remove failed:", error);
-			});
+		.catch(error => {
+			db = null;
+			console.error("[history-db] remove failed:", error?.message || error);
+		});
 	},
 
 
@@ -321,9 +375,10 @@ maxResults = 1000)
 					request.onerror = () => reject(request.error);
 				});
 			})
-			.catch(error => {
-				console.error("[history-db] clear failed:", error);
-			});
+		.catch(error => {
+			db = null;
+			console.error("[history-db] clear failed:", error?.message || error);
+		});
 	},
 
 
@@ -340,11 +395,12 @@ maxResults = 1000)
 					request.onerror = () => reject(request.error);
 				});
 			})
-			.catch(error => {
-				console.error("[history-db] getStats failed:", error);
+		.catch(error => {
+			db = null;
+			console.error("[history-db] getStats failed:", error?.message || error);
 
-				return { totalItems: 0 };
-			});
+			return { totalItems: 0 };
+		});
 	},
 
 
@@ -396,11 +452,18 @@ maxResults = 1000)
 
 				return count;
 			})
-			.catch(error => {
-				console.error("[history-db] HTU import failed:", error);
+		.catch(error => {
+			db = null;
+			console.error("[history-db] HTU import failed:", error?.message || error);
 
-				throw error;
-			});
+			throw error;
+		});
+	},
+
+
+	getDB()
+	{
+		return openDB();
 	},
 
 

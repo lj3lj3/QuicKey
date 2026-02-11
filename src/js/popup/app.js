@@ -18,6 +18,8 @@ import recentTabs from "@/background/recent-tabs";
 import storage from "@/background/quickey-storage";
 import settings from "@/background/settings";
 import { debounce } from "@/background/debounce";
+import adaptiveHistory from "@/background/adaptive-history";
+import historyDB from "@/background/history-db";
 import * as k from "@/background/constants";
 import _ from "lodash";
 
@@ -119,6 +121,13 @@ export default class App extends React.Component {
 	popupH = 0;
 	nextFrameRequestID = 0;
 	port = null;
+
+
+	isEnhancedSearchEnabled()
+	{
+		// popup mode doesn't support enhanced search for performance
+		return !this.props.isPopup && this.settings[k.EnableEnhancedSearch.Key];
+	}
 
 
 	constructor(props, context)
@@ -239,6 +248,15 @@ export default class App extends React.Component {
 			storage.set(() => ({ lastQuery }));
 		});
 
+		// eager init adaptive history when enhanced search is enabled
+		if (this.isEnhancedSearchEnabled()) {
+			if (!adaptiveHistory.isLoaded()) {
+				historyDB.getDB()
+					.then(db => adaptiveHistory.init(db))
+					.catch(err => console.error("[enhanced-search] init failed:", err));
+			}
+		}
+
 		this.visible = true;
 		this.port = this.props.port;
 		this.port.onMessage.addListener(this.onMessage);
@@ -328,18 +346,19 @@ export default class App extends React.Component {
 				// even if we're navigating recents and pass null below, we
 				// still need the activeTab to get the currentWindowID
 			const activeTab = await this.getActiveTab();
-			const tabs = await initTabs(
-					// don't include recently closed tabs when navigating
-					// recents, since you can't navigate to them
-				recentTabs.getAll(!this.navigatingRecents &&
-					settings[k.IncludeClosedTabs.Key]),
-					// when we're navigating recents, we want to include the
-					// current tab in the list in the popup window, so pass
-					// null so initTabs() doesn't filter it out
-				this.navigatingRecents ? null : activeTab,
-				settings[k.MarkTabsInOtherWindows.Key],
-				settings[k.UsePinyin.Key]
-			);
+		const tabs = await initTabs(
+				// don't include recently closed tabs when navigating
+				// recents, since you can't navigate to them
+			recentTabs.getAll(!this.navigatingRecents &&
+				settings[k.IncludeClosedTabs.Key]),
+				// when we're navigating recents, we want to include the
+				// current tab in the list in the popup window, so pass
+				// null so initTabs() doesn't filter it out
+			this.navigatingRecents ? null : activeTab,
+			settings[k.MarkTabsInOtherWindows.Key],
+			settings[k.UsePinyin.Key],
+			this.isEnhancedSearchEnabled()
+		);
 			const currentWindowID = activeTab && activeTab.windowId;
 				// this promise chain starts with settingsPromise, so by
 				// the time we're, that's already resolved and has set
@@ -396,21 +415,21 @@ export default class App extends React.Component {
 			this.mode = "bookmarks";
 			query = searchBoxText.slice(BookmarksQuery.length);
 
-			if (!this.bookmarks.length) {
-					// we haven't fetched the bookmarks yet, so load them
-					// and then call getMatchingItems() after they're ready
-				this.loadPromisedItems(
-					() => getBookmarks(showBookmarkPaths, usePinyin),
-					"bookmarks"
-				);
-			}
-		} else if (searchBoxTextLC.indexOf(HistoryQuery) == 0) {
+		if (!this.bookmarks.length) {
+				// we haven't fetched the bookmarks yet, so load them
+				// and then call getMatchingItems() after they're ready
+			this.loadPromisedItems(
+				() => getBookmarks(showBookmarkPaths, usePinyin),
+				"bookmarks"
+			);
+		}
+	} else if (searchBoxTextLC.indexOf(HistoryQuery) == 0) {
 			this.mode = "history";
 			query = searchBoxText.slice(HistoryQuery.length);
 
 			if (!this.history.length) {
 				this.loadPromisedItems(
-					() => getHistory(usePinyin, enableUnlimitedHistory),
+					() => getHistory(usePinyin, enableUnlimitedHistory, this.isEnhancedSearchEnabled()),
 					"history"
 				);
 			}
@@ -419,8 +438,24 @@ export default class App extends React.Component {
 				// don't match any items
 			this.mode = "command";
 			query = "";
-		} else {
+	} else {
 			this.mode = "tabs";
+
+			const scope = this.settings[k.DefaultSearchScope.Key] || k.DefaultSearchScope.Tabs;
+
+			if (scope.includes("history") && !this.history.length) {
+				this.loadPromisedItems(
+					() => getHistory(usePinyin, enableUnlimitedHistory, this.isEnhancedSearchEnabled()),
+					"history"
+				);
+			}
+
+			if (scope.includes("bookmarks") && !this.bookmarks.length) {
+				this.loadPromisedItems(
+					() => getBookmarks(showBookmarkPaths, usePinyin),
+					"bookmarks"
+				);
+			}
 		}
 
 		this.setState({ searchBoxText });
@@ -479,6 +514,44 @@ export default class App extends React.Component {
 	}
 
 
+	getMergedItems()
+	{
+		const scope = this.settings[k.DefaultSearchScope.Key] || k.DefaultSearchScope.Tabs;
+
+		if (scope === k.DefaultSearchScope.Tabs) {
+			return this.tabs;
+		}
+
+		const includeHistory = scope.includes("history");
+		const includeBookmarks = scope.includes("bookmarks");
+		const tabURLs = new Set(this.tabs.map(t => t.url));
+		let merged = [...this.tabs];
+
+		if (includeHistory && this.history.length) {
+			const newHistoryItems = this.history.filter(item => !tabURLs.has(item.url));
+
+			for (const item of newHistoryItems) {
+				tabURLs.add(item.url);
+				item.source = "history";
+			}
+
+			merged = merged.concat(newHistoryItems);
+		}
+
+		if (includeBookmarks && this.bookmarks.length) {
+			const newBookmarkItems = this.bookmarks.filter(item => !tabURLs.has(item.url));
+
+			for (const item of newBookmarkItems) {
+				item.source = "bookmarks";
+			}
+
+			merged = merged.concat(newBookmarkItems);
+		}
+
+		return merged;
+	}
+
+
 	getMatchingItems(
 		query)
 	{
@@ -490,7 +563,11 @@ export default class App extends React.Component {
 			// been a previous query, leaving hitMasks on all the items.
 			// if the query is now empty, we need to clear the hitMasks from
 			// all the items before returning so no chars are shown matching.
-		const items = scoreItems(this[this.mode], tokens, this.settings[k.UsePinyin.Key]);
+		const scope = this.settings[k.DefaultSearchScope.Key] || k.DefaultSearchScope.Tabs;
+		const dataSource = (this.mode === "tabs" && scope !== k.DefaultSearchScope.Tabs)
+			? this.getMergedItems()
+			: this[this.mode];
+		const items = scoreItems(dataSource, tokens, this.settings[k.UsePinyin.Key]);
 
 		if (!query) {
 			switch (this.mode) {
@@ -515,6 +592,25 @@ export default class App extends React.Component {
 
 			// adjust these min values based on the number of tokens, since each
 			// item's score is based on the total from each token
+		// apply adaptive history boosts for URL-based modes
+		if (this.isEnhancedSearchEnabled()
+				&& query
+				&& (this.mode === "tabs" || this.mode === "history"
+					|| this.mode === "bookmarks")) {
+			const boosts = adaptiveHistory.getBoosts(query, this.mode);
+
+			if (Object.keys(boosts).length > 0) {
+				for (const item of items) {
+					const boost = boosts[item.url];
+
+					if (boost) {
+						item.score *= boost;
+					}
+				}
+				items.sort((a, b) => b.score - a.score);
+			}
+		}
+
 		const minScore = MinScore * tokens.length;
 		const minScoreDiff = MinScoreDiff * tokens.length;
 		const nearlyZeroScore = NearlyZeroScore * tokens.length;
@@ -540,7 +636,17 @@ export default class App extends React.Component {
 	{
 			// check for a URL on the selected item, so we can ignore the special
 			// items that just show a message
-		if (item && item.url) {
+	if (item && item.url) {
+			// record adaptive history for all URL-based modes
+			if (this.isEnhancedSearchEnabled()
+					&& this.state.query
+					&& (this.mode === "tabs" || this.mode === "history"
+						|| this.mode === "bookmarks")) {
+				const recordMode = item.source || this.mode;
+
+				adaptiveHistory.record(this.state.query, item.url, recordMode);
+			}
+
 			const {url} = item;
 			let tabOrWindow;
 
@@ -551,7 +657,7 @@ export default class App extends React.Component {
 				// them, instead of the popup being second on the list.
 			await this.blurPopupWindow();
 
-			if (this.mode == "tabs") {
+		if (this.mode == "tabs" && !item.source) {
 				if (item.sessionId) {
 						// this is a closed tab, so restore it
 					tabOrWindow = await this.sendMessage("restoreSession",
@@ -650,7 +756,22 @@ export default class App extends React.Component {
 
 
 		if (item) {
-			if (mode == "tabs") {
+			if (mode == "tabs" && item.source) {
+					// hybrid mode: item from history or bookmarks
+				if (item.source === "history") {
+					const url = item.originalURL || item.url;
+
+					deleteItem(() => chrome.history.deleteUrl({ url }));
+
+					if (this.isEnhancedSearchEnabled()) {
+						adaptiveHistory.removeURL(url);
+					}
+				} else if (item.source === "bookmarks") {
+					if (confirm(DeleteBookmarkConfirmation)) {
+						deleteItem(({id}) => chrome.bookmarks.remove(id));
+					}
+				}
+			} else if (mode == "tabs") {
 				if (!isNaN(item.id)) {
 						// the onTabRemoved handler below will re-init the
 						// list, which will then show the tab as closed
@@ -678,13 +799,18 @@ export default class App extends React.Component {
 				if (confirm(DeleteBookmarkConfirmation)) {
 					deleteItem(({id}) => chrome.bookmarks.remove(id));
 				}
-			} else if (mode == "history") {
+		} else if (mode == "history") {
 				const url = item.originalURL;
 
 					// we have to use originalURL to delete the history item,
 					// since it may have been a suspended page and we convert
 					// url to the unsuspended version
 				deleteItem(() => chrome.history.deleteUrl({ url }));
+
+					// clean adaptive history for this URL
+				if (this.isEnhancedSearchEnabled()) {
+					adaptiveHistory.removeURL(url);
+				}
 
 					// just in case this URL was also recently closed, remove
 					// it from the tabs and recents lists, since it will no

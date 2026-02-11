@@ -5,6 +5,7 @@ import NewSetting from "./new-setting";
 import {OptionsContext} from "./options-provider";
 import historyDB from "@/background/history-db";
 import * as k from "@/background/constants";
+import EnhancedSearchSection from "./enhanced-search-section";
 
 
 export default function HistorySection()
@@ -206,6 +207,8 @@ export default function HistorySection()
 					</button>
 				</div>
 			</div>}
+
+			<EnhancedSearchSection settings={settings} onChange={onChange} />
 		</Section>
 	);
 }

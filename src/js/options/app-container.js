@@ -4,7 +4,7 @@ import OptionsApp from "./app";
 import trackers from "@/background/page-trackers";
 import storage from "@/background/quickey-storage";
 import settings from "@/background/settings";
-import { Platform, ShowTabCount, HidePopupBehavior, NavigateRecentsWithPopup, EnableUnlimitedHistory } from "@/background/constants";
+import { Platform, ShowTabCount, HidePopupBehavior, NavigateRecentsWithPopup, EnableUnlimitedHistory, EnableEnhancedSearch } from "@/background/constants";
 import { OptionsProvider } from "./options-provider";
 import { withSearchParams } from "./with-search-params";
 import { utm } from "./utils";
@@ -104,9 +104,10 @@ class OptionsAppContainer extends React.Component {
 	{
 		settings.set(key, value)
 			.then(settings => {
-				if (key == ShowTabCount.Key || key == HidePopupBehavior.Key
-						|| key == NavigateRecentsWithPopup.Key
-						|| key == EnableUnlimitedHistory.Key) {
+			if (key == ShowTabCount.Key || key == HidePopupBehavior.Key
+					|| key == NavigateRecentsWithPopup.Key
+					|| key == EnableUnlimitedHistory.Key
+					|| key == EnableEnhancedSearch.Key) {
 					chrome.runtime.sendMessage({
 						message: "settingChanged",
 						key,

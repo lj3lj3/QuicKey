@@ -33,6 +33,8 @@ const DefaultSettings = {
 	[k.CurrentWindowLimitSearch.Key]: false,
 	[k.NavigateRecentsWithPopup.Key]: true,
 	[k.EnableUnlimitedHistory.Key]: false,
+	[k.EnableEnhancedSearch.Key]: false,
+	[k.DefaultSearchScope.Key]: k.DefaultSearchScope.Tabs,
 	[k.Shortcuts.Key]: {
 		mac: MacDefaults,
 		win: DefaultShortcuts
