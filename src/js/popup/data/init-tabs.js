@@ -1,5 +1,6 @@
 import decode from "@/lib/decode";
 import {addPinyin} from "./add-pinyin";
+import {calculateFrecencyBoost} from "../score/frecency";
 import _ from "lodash";
 
 
@@ -36,11 +37,35 @@ function addRecentBoost(
 }
 
 
+async function enrichWithFrecency(tabs) {
+	const historyQueries = tabs.map(tab =>
+		chrome.history.search({ text: tab.url, maxResults: 1, startTime: 0 })
+			.then(results => {
+				const match = results.find(r => r.url === tab.url);
+
+				if (match && match.visitCount && match.lastVisitTime) {
+					const frecencyFactor = calculateFrecencyBoost(match);
+
+					tab.recentBoost = (tab.recentBoost || 1) * frecencyFactor;
+				}
+			})
+			.catch(() => {
+				// silently ignore query failures for individual tabs
+			})
+	);
+
+	await Promise.all(historyQueries);
+
+	return tabs;
+}
+
+
 export default async function initTabs(
 	tabsPromise,
 	activeTab,
 	markTabsInOtherWindows,
-	usePinyin)
+	usePinyin,
+	enableEnhancedSearch)
 {
 	let tabsByTitle = {};
 
@@ -118,9 +143,16 @@ export default async function initTabs(
 				_.remove(tabs, { id: activeTab.id });
 			}
 
-				// make sure this index of tabs gets GC'd
-			tabsByTitle = null;
+			// make sure this index of tabs gets GC'd
+		tabsByTitle = null;
 
-			return tabs;
-		});
+		return tabs;
+	})
+	.then(tabs => {
+		if (enableEnhancedSearch) {
+			return enrichWithFrecency(tabs);
+		}
+
+		return tabs;
+	});
 }

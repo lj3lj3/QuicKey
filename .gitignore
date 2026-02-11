@@ -7,3 +7,6 @@
 /dist*
 /.idea
 doc/
+.DS_Store
+.codebuddy/
+.vscode/

@@ -103,3 +103,13 @@ export const Shortcuts = {
 	CopyURL: "copyURL",
 	CopyTitleURL: "copyTitleURL"
 };
+export const EnableEnhancedSearch = {
+	Key: "enableEnhancedSearch"
+};
+export const DefaultSearchScope = {
+	Key: "defaultSearchScope",
+	Tabs: "tabs",
+	TabsHistory: "tabs+history",
+	TabsBookmarks: "tabs+bookmarks",
+	All: "tabs+history+bookmarks"
+};
