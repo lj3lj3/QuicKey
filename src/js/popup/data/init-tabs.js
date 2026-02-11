@@ -15,6 +15,12 @@ const VeryRecentMS = 5 * 1000;
 const VeryRecentBoost = .15;
 const ClosedPenalty = .98;
 
+// cache frecency data to avoid redundant chrome.history.search() calls
+// when tabs are reloaded (e.g. on tab activation events)
+const FrecencyCacheMaxAge = 30 * 1000;
+let frecencyCache = {};
+let frecencyCacheTime = 0;
+
 
 function addRecentBoost(
 	tab)
@@ -38,23 +44,46 @@ function addRecentBoost(
 
 
 async function enrichWithFrecency(tabs) {
-	const historyQueries = tabs.map(tab =>
-		chrome.history.search({ text: tab.url, maxResults: 1, startTime: 0 })
-			.then(results => {
-				const match = results.find(r => r.url === tab.url);
+	const now = Date.now();
 
-				if (match && match.visitCount && match.lastVisitTime) {
-					const frecencyFactor = calculateFrecencyBoost(match);
+	// invalidate cache if it's too old
+	if ((now - frecencyCacheTime) > FrecencyCacheMaxAge) {
+		frecencyCache = {};
+	}
 
-					tab.recentBoost = (tab.recentBoost || 1) * frecencyFactor;
-				}
-			})
-			.catch(() => {
-				// silently ignore query failures for individual tabs
-			})
-	);
+	// separate tabs into cached and uncached
+	const uncachedTabs = tabs.filter(tab => !(tab.url in frecencyCache));
 
-	await Promise.all(historyQueries);
+	// only query chrome.history for uncached URLs
+	if (uncachedTabs.length > 0) {
+		const historyQueries = uncachedTabs.map(tab =>
+			chrome.history.search({ text: tab.url, maxResults: 1, startTime: 0 })
+				.then(results => {
+					const match = results.find(r => r.url === tab.url);
+
+					if (match && match.visitCount && match.lastVisitTime) {
+						frecencyCache[tab.url] = calculateFrecencyBoost(match);
+					} else {
+						frecencyCache[tab.url] = null;
+					}
+				})
+				.catch(() => {
+					frecencyCache[tab.url] = null;
+				})
+		);
+
+		await Promise.all(historyQueries);
+		frecencyCacheTime = now;
+	}
+
+	// apply cached frecency boosts to all tabs
+	for (const tab of tabs) {
+		const frecencyFactor = frecencyCache[tab.url];
+
+		if (frecencyFactor) {
+			tab.recentBoost = (tab.recentBoost || 1) * frecencyFactor;
+		}
+	}
 
 	return tabs;
 }

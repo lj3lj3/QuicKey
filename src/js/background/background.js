@@ -72,6 +72,32 @@ let activeTab;
 let lastWindowID;
 let lastUsedVersion;
 let usePinyin;
+let cachedTabs = null;
+let cachedSessions = null;
+const TabCacheMaxAge = 2000;
+let tabCacheTime = 0;
+
+
+function invalidateTabCache()
+{
+	cachedTabs = null;
+	cachedSessions = null;
+	tabCacheTime = 0;
+}
+
+
+function refreshTabCache()
+{
+	const now = Date.now();
+
+	if (cachedTabs && (now - tabCacheTime) < TabCacheMaxAge) {
+		return;
+	}
+
+	tabCacheTime = now;
+	cachedTabs = chrome.tabs.query({});
+	cachedSessions = chrome.sessions.getRecentlyClosed();
+}
 
 
 	// get the URL from either a tab object or what's returned from getContexts()
@@ -250,9 +276,17 @@ async function openPopupWindow(
 
 			// the popup window isn't open, so create a new one.  tell it whether
 			// to focus the search box or navigate recents.
+			// pass activeTab data through props so popup can use it directly
+			// without sending a message back to background
 		return popupWindow.create(
 			activeTab,
-			{ focusSearch, navigatingRecents },
+			{ focusSearch, navigatingRecents, activeTab: {
+				id: activeTab?.id,
+				windowId: activeTab?.windowId,
+				url: activeTab?.url,
+				title: activeTab?.title,
+				index: activeTab?.index
+			} },
 			navigatingRecents ? "right-center" : "center-center"
 		);
 	}
@@ -265,7 +299,14 @@ async function openPopupWindow(
 			// select the first item.  if there's no activeTab (such as when
 			// the shortcut is pressed and a devtools window is in the
 			// foreground), the popup will appear aligned to the screen.
-		return sendPopupMessage("showWindow", { focusSearch, activeTab });
+			// pass serializable activeTab data so popup can use it directly
+		return sendPopupMessage("showWindow", { focusSearch, activeTab: {
+			id: activeTab?.id,
+			windowId: activeTab?.windowId,
+			url: activeTab?.url,
+			title: activeTab?.title,
+			index: activeTab?.index
+		} });
 	}
 
 		// the popup is open and focused, so use the shortcut to move the
@@ -419,6 +460,9 @@ function disableCommands()
 	// to select the currently focused tab
 popupWindow.on(["hide", "close"], () => navigatingRecents = false);
 
+	// refresh tab cache before popup opens so data is ready
+popupWindow.on("create", () => refreshTabCache());
+
 
 chrome.tabs.onActivated.addListener(event => {
 	if (!startingUp) {
@@ -429,6 +473,7 @@ chrome.tabs.onActivated.addListener(event => {
 
 chrome.tabs.onCreated.addListener(tab => {
 	toolbarIcon.updateTabCount(1);
+	invalidateTabCache();
 
 	if (!startingUp && !tab.active && !isPopupWindow(tab)) {
 			// this tab was opened by ctrl-clicking a link or by opening
@@ -442,6 +487,7 @@ chrome.tabs.onCreated.addListener(tab => {
 
 chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
 	toolbarIcon.updateTabCount(-1);
+	invalidateTabCache();
 
 		// debounce the handling of a removed tab since Chrome seems to
 		// trigger the event when shutting down, and we want to ignore
@@ -455,6 +501,7 @@ chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
 	// tabs seem to get replaced with new IDs when they're auto-discarded by
 	// Chrome, so we want to update any recency data for them
 chrome.tabs.onReplaced.addListener((newID, oldID) => {
+	invalidateTabCache();
 	if (!startingUp) {
 		recentTabs.replace(oldID, newID);
 	}
@@ -573,6 +620,14 @@ chrome.runtime.onMessage.addListener(({message, ...payload}, sender, sendRespons
 		navigatingRecents = false;
 	} else if (message === "getActiveTab") {
 		sendResponse(activeTab);
+	} else if (message === "getCachedTabs") {
+		(async () => {
+			refreshTabCache();
+			const [tabs, sessions] = await Promise.all([cachedTabs, cachedSessions]);
+
+			sendResponse({ tabs, sessions });
+		})();
+		asyncResponse = true;
 	} else if (message === "reopenPopup") {
 		(async () => {
 			const currentActiveTab = activeTab;
