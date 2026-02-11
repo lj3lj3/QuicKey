@@ -115,6 +115,8 @@ export default class App extends React.Component {
 	searchBox = null;
 	settings = null;
 	settingsPromise = null;
+	lastStorageData = null;
+	cachedActiveTab = null;
 	className = "";
 	popupTabID = -1;
 	popupW = 0;
@@ -161,8 +163,19 @@ export default class App extends React.Component {
 				// the MRU key from the shortcut won't automatically switch
 				// to the first result.
 			this.gotMRUKey = !this.openedForSearch;
-			this.getActiveTab(true)
-				.then((activeTab) => this.popupTabID = activeTab?.id);
+
+				// use the activeTab data passed through props from background
+				// to avoid a cross-process message round-trip in getActiveTab()
+			if (props.activeTab && props.activeTab.id) {
+				this.cachedActiveTab = props.activeTab;
+				this.popupTabID = -1;
+			}
+
+			if (!this.cachedActiveTab) {
+					// fallback: query for activeTab if not provided in props
+				this.getActiveTab(true)
+					.then((activeTab) => this.popupTabID = activeTab?.id);
+			}
 
 				// create a messaging channel API for the popupWindow object in
 				// the background script.  we only need this in the popup state.
@@ -342,23 +355,38 @@ export default class App extends React.Component {
 	loadTabs()
 	{
 		const loader = async () => {
-			const settings = await this.settingsPromise;
-				// even if we're navigating recents and pass null below, we
-				// still need the activeTab to get the currentWindowID
-			const activeTab = await this.getActiveTab();
-		const tabs = await initTabs(
-				// don't include recently closed tabs when navigating
-				// recents, since you can't navigate to them
-			recentTabs.getAll(!this.navigatingRecents &&
-				settings[k.IncludeClosedTabs.Key]),
-				// when we're navigating recents, we want to include the
-				// current tab in the list in the popup window, so pass
-				// null so initTabs() doesn't filter it out
-			this.navigatingRecents ? null : activeTab,
-			settings[k.MarkTabsInOtherWindows.Key],
-			settings[k.UsePinyin.Key],
-			this.isEnhancedSearchEnabled()
-		);
+				// run settingsPromise, getActiveTab, and getCachedTabs in
+				// parallel instead of serial awaits to reduce total loading time.
+				// getCachedTabs fetches pre-loaded tab/session data from background
+				// to avoid redundant chrome.tabs.query/sessions API calls.
+			const cachedTabsPromise = this.props.isPopup
+				? this.sendMessage("getCachedTabs")
+				: Promise.resolve(null);
+
+			const [settings, activeTab, cachedTabData] = await Promise.all([
+				this.settingsPromise,
+				this.getActiveTab(),
+				cachedTabsPromise
+			]);
+
+				// pass pre-fetched storage data and cached tab data to
+				// recentTabs.getAll() to avoid redundant API calls
+			const tabs = await initTabs(
+					// don't include recently closed tabs when navigating
+					// recents, since you can't navigate to them
+				recentTabs.getAll(
+					!this.navigatingRecents && settings[k.IncludeClosedTabs.Key],
+					this.lastStorageData,
+					cachedTabData
+				),
+					// when we're navigating recents, we want to include the
+					// current tab in the list in the popup window, so pass
+					// null so initTabs() doesn't filter it out
+				this.navigatingRecents ? null : activeTab,
+				settings[k.MarkTabsInOtherWindows.Key],
+				settings[k.UsePinyin.Key],
+				this.isEnhancedSearchEnabled()
+			);
 			const currentWindowID = activeTab && activeTab.windowId;
 				// this promise chain starts with settingsPromise, so by
 				// the time we're, that's already resolved and has set
@@ -952,6 +980,10 @@ export default class App extends React.Component {
 				// window.  lastFocusedWindow returns the correct window.
 			return chrome.tabs.query({ active: true, lastFocusedWindow: true })
 				.then(([activeTab]) => activeTab);
+		} else if (this.cachedActiveTab) {
+				// use the activeTab data that was passed through props from
+				// background to avoid a cross-process message round-trip
+			return Promise.resolve(this.cachedActiveTab);
 		} else {
 				// since we're in a popup, get the active tab from the
 				// background, which recorded it before opening this window
@@ -963,6 +995,10 @@ export default class App extends React.Component {
 	async updateSettings()
 	{
 		const data = await storage.get();
+
+			// save storage data so it can be reused by recentTabs.getAll()
+			// to avoid a redundant storage.get() call
+		this.lastStorageData = data;
 
 		this.setState({
 			newSettingsAvailable: data.lastSeenOptionsVersion < storage.version
@@ -1030,6 +1066,11 @@ export default class App extends React.Component {
 			// getActiveTab(), which checks visible
 		this.visible = true;
 		this.ignoreNextBlur = false;
+
+			// cache the activeTab from background for use in getActiveTab()
+		if (activeTab && activeTab.id) {
+			this.cachedActiveTab = activeTab;
+		}
 
 			// set our flag to the latest value so that the correct item is
 			// selected after tabs are loaded

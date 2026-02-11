@@ -268,15 +268,25 @@ DEBUG && console.log("tab replaced", oldID, "index", index, getRecentStackString
 
 
 function getAll(
-	includeClosedTabs)
+	includeClosedTabs,
+	storageData,
+	cachedTabData)
 {
 const t = performance.now();
 
-	return storage.get(data => {
-		return Promise.all([
-			chrome.tabs.query({}),
-			includeClosedTabs ? chrome.sessions.getRecentlyClosed() : []
-		])
+	const processor = data => {
+		// use pre-fetched tab data from background cache if available,
+		// otherwise fall back to direct API calls
+		const tabsPromise = cachedTabData?.tabs
+			? Promise.resolve(cachedTabData.tabs)
+			: chrome.tabs.query({});
+		const sessionsPromise = includeClosedTabs
+			? (cachedTabData?.sessions
+				? Promise.resolve(cachedTabData.sessions)
+				: chrome.sessions.getRecentlyClosed())
+			: Promise.resolve([]);
+
+		return Promise.all([tabsPromise, sessionsPromise])
 			.then(([freshTabs, closedTabs]) => {
 				const {tabIDs} = data;
 				const tabsByURL = {};
@@ -351,7 +361,15 @@ const t = performance.now();
 DEBUG && console.log("getAll took", performance.now() - t, "ms");
 				return tabs;
 			});
-	});
+	};
+
+	// if pre-fetched storage data is provided, use it directly to avoid
+	// a redundant storage.get() call
+	if (storageData) {
+		return processor(storageData);
+	}
+
+	return storage.get(processor);
 }
 
 
