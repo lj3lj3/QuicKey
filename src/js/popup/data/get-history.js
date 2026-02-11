@@ -1,9 +1,11 @@
 import decode from "@/lib/decode";
 import addURLs from "./add-urls";
 import {addPinyin} from "./add-pinyin";
+import historyDB from "@/background/history-db";
 
 
 const RequestedItemCount = 2000;
+const UnlimitedRequestedItemCount = 1000;
 const LoopItemCount = 1000;
 const FilenamePattern = /([^/]*)\/([^/]+)?$/;
 
@@ -11,7 +13,50 @@ const FilenamePattern = /([^/]*)\/([^/]+)?$/;
 const loop = fn => fn().then(val => (val === true && loop(fn)) || val);
 
 
-export default function getHistory(
+function processItem(
+	item,
+	usePinyin)
+{
+	addURLs(item, true);
+
+	const {url, title} = item;
+
+	if (!title) {
+		const match = url.match(FilenamePattern);
+
+		item.title = decode((match && (match[2] || match[1])) || url);
+	}
+
+	if (usePinyin) {
+		addPinyin(item);
+	}
+
+	return item;
+}
+
+
+function getHistoryFromDB(
+	usePinyin)
+{
+	return historyDB.search(UnlimitedRequestedItemCount)
+		.then(items => {
+			const urls = {};
+
+			items.forEach(item => {
+				const {url} = item;
+
+				if (!(url in urls)) {
+					processItem(item, usePinyin);
+					urls[url] = item;
+				}
+			});
+
+			return Object.values(urls);
+		});
+}
+
+
+function getHistoryFromChromeAPI(
 	usePinyin)
 {
 	const ids = {};
@@ -75,4 +120,16 @@ export default function getHistory(
 				}
 			});
 	});
+}
+
+
+export default function getHistory(
+	usePinyin,
+	useUnlimitedHistory)
+{
+	if (useUnlimitedHistory) {
+		return getHistoryFromDB(usePinyin);
+	}
+
+	return getHistoryFromChromeAPI(usePinyin);
 }

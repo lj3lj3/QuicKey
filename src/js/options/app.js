@@ -4,6 +4,7 @@ import {Sections, SectionList, SectionLabel} from "./sections";
 import GeneralSection from "./general-section";
 import PopupSection from "./popup-section";
 import ShortcutsSection from "./shortcuts-section";
+import HistorySection from "./history-section";
 import AboutSection from "./about-section";
 import Shortcut from "./shortcut";
 import {OptionsContext} from "./options-provider";
@@ -84,6 +85,7 @@ export default function OptionsApp() {
 					<SectionLabel section="general" label="General" />
 					<SectionLabel section="popup" label="Popup window" />
 					<SectionLabel section="shortcuts" label="Keyboard shortcuts" />
+					<SectionLabel section="history" label="History" />
 					<SectionLabel section="about" label="About" />
 				</SectionList>
 
@@ -104,6 +106,10 @@ export default function OptionsApp() {
 						<Route
 							path="shortcuts"
 							element={<ShortcutsSection />}
+						/>
+						<Route
+							path="history"
+							element={<HistorySection />}
 						/>
 						<Route
 							path="about"

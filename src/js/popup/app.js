@@ -388,6 +388,7 @@ export default class App extends React.Component {
 	{
 		const showBookmarkPaths = this.settings[k.ShowBookmarkPaths.Key];
 		const usePinyin = this.settings[k.UsePinyin.Key];
+		const enableUnlimitedHistory = this.settings[k.EnableUnlimitedHistory.Key];
 		const searchBoxTextLC = searchBoxText.toLowerCase();
 		let query = searchBoxText;
 
@@ -409,7 +410,7 @@ export default class App extends React.Component {
 
 			if (!this.history.length) {
 				this.loadPromisedItems(
-					() => getHistory(usePinyin),
+					() => getHistory(usePinyin, enableUnlimitedHistory),
 					"history"
 				);
 			}

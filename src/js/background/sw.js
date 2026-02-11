@@ -47,6 +47,8 @@ globalThis.dispatchCachedEvents = cacheEvents([
 	"tabs.onRemoved",
 	"tabs.onReplaced",
 	"windows.onFocusChanged",
+	"history.onVisited",
+	"history.onVisitRemoved",
 ]);
 
 importScripts("./background.js");

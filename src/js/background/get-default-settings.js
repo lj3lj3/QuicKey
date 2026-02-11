@@ -32,6 +32,7 @@ const DefaultSettings = {
 	[k.CurrentWindowLimitRecents.Key]: false,
 	[k.CurrentWindowLimitSearch.Key]: false,
 	[k.NavigateRecentsWithPopup.Key]: true,
+	[k.EnableUnlimitedHistory.Key]: false,
 	[k.Shortcuts.Key]: {
 		mac: MacDefaults,
 		win: DefaultShortcuts
