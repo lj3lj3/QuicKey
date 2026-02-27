@@ -4,8 +4,8 @@
 
 @media (prefers-color-scheme: dark) {
 	body {
-		--color: #fff;
-		--background: #202124;
+		--color: #e8eaed;
+		--background: #1e1f22;
 	}
 
 	.options.icon, .search.icon, .clear.icon {
@@ -19,6 +19,14 @@
 	.inprivate.icon {
 		filter: none !important;
 		opacity: 1 !important;
+	}
+
+	.search-box {
+		--search-bg: #2b2d31;
+		--search-border: #3c3e44;
+		--search-focus-border: hsl(220, 60%, 55%);
+		--search-focus-bg: #2b2d31;
+		--search-shadow: rgba(0, 0, 0, 0.3);
 	}
 
 	.search-box, .command-placeholder {
@@ -59,7 +67,11 @@
 	}
 
 	.results-list-item.selected {
-		--background: #444547;
+		--background: #35373b;
+	}
+
+	.results-list-item:not(.selected):hover {
+		--background: #2b2d31;
 	}
 
 	.results-list-item div b, .search-box input {
@@ -76,11 +88,11 @@
 	}
 
 	::-webkit-scrollbar-thumb, .firefox .results-list {
-		--background: rgba(255, 255, 255, .1);
+		--background: rgba(255, 255, 255, .12);
 	}
 
 	::-webkit-scrollbar-thumb:hover {
-		--background: rgba(255, 255, 255, .3);
+		--background: rgba(255, 255, 255, .25);
 	}
 }
 
@@ -107,8 +119,9 @@ html, body {
 
 body {
 	background: var(--background, #fff);
-	color: var(--color, #000);
+	color: var(--color, #222);
 	font-size: 14px;
+	line-height: 1.5;
 	-webkit-user-select: none;
 	user-select: none;
 	cursor: default;
@@ -158,21 +171,31 @@ img {
 
 .search-box input, .command-placeholder {
 	font-size: 14px;
-	font-weight: bold;
-	width: calc(100% - 10px);
-	height: 25px;
-	margin: 5px;
-	padding: 2px 22px 5px 28px;
-	background-color: transparent;
-	border: none;
-	border-bottom: 1px solid var(--border-color, #ddd);
+	font-weight: 600;
+	width: calc(100% - 12px);
+	height: 32px;
+	margin: 6px;
+	padding: 4px 26px 4px 32px;
+	background-color: var(--search-bg, #f5f6f8);
+	border: 1px solid var(--search-border, #e0e2e6);
+	border-radius: 8px;
 	outline: none;
+	transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+.search-box input:focus {
+	border-color: var(--search-focus-border, hsl(220, 60%, 55%));
+	box-shadow: 0 0 0 3px var(--search-shadow, rgba(66, 133, 244, 0.15));
+	background-color: var(--search-focus-bg, #fff);
 }
 
 .search-box .search.icon {
-	top: 9px;
-	left: 12px;
+	top: 0;
+	bottom: 0;
+	margin: auto 0;
+	left: 14px;
 	position: absolute;
+	transition: fill 0.2s ease;
 }
 
 .search-box input::-webkit-input-placeholder,
@@ -205,6 +228,7 @@ img {
 	background-size: 10px 16px;
 	background-repeat: no-repeat;
 	background-position: center;
+	transition: background-color 0.15s ease;
 }
 
 .search-box input::-webkit-search-cancel-button:hover {
@@ -253,16 +277,17 @@ img {
 }
 
 .options-button {
-	width: 22px;
-	height: 22px;
-	top: 5px;
-	right: 5px;
-	padding: 3px;
-	border-radius: 50%;
+	width: 24px;
+	height: 24px;
+	top: 10px;
+	right: 10px;
+	padding: 4px;
+	border-radius: 6px;
 	text-align: center;
 	background-color: transparent;
 	position: absolute;
 	display: inline-block;
+	transition: background-color 0.15s ease;
 }
 
 .options-button .badge {
@@ -293,11 +318,11 @@ img {
    =========================================================================== */
 
 .results-list-container {
-	padding: 0 5px 3px 5px;
+	padding: 2px 5px 4px 5px;
 }
 
 .mac .results-list-container {
-	padding-bottom: 5px;
+	padding-bottom: 6px;
 }
 
 .results-list {
@@ -309,25 +334,32 @@ img {
 }
 
 .results-list-item {
-	margin: 0;
-	padding: 4px 6px 5px 28px;
+	margin: 1px 0;
+	padding: 5px 8px 6px 30px;
 	max-width: 100%;
-	background-position: 6px 6px;
+	background-position: 8px 7px;
 	background-size: 16px 16px;
 	background-repeat: no-repeat;
 	white-space: nowrap;
 	text-overflow: ellipsis;
 	overflow: hidden;
 	position: relative;
+	border-radius: 6px;
+	transition: background-color 0.12s ease;
+}
+
+.results-list-item:not(.selected):hover {
+	background-color: var(--background, #f3f4f6);
 }
 
 .results-list-item.selected {
-	background-color: var(--background, #ebebeb)
+	background-color: var(--background, #e8eaee);
 }
 
 .results-list-item .favicon, .results-list-item .badge {
-	left: 6px;
-	top: 6px;
+	left: 8px;
+	top: 50%;
+	transform: translateY(-50%);
 	width: 16px;
 	height: 16px;
 	background-size: 16px 16px;
@@ -340,11 +372,13 @@ img {
 }
 
 .results-list-item .badge {
-	top: 25px;
+	top: auto;
+	bottom: 5px;
+	transform: none;
 }
 
 .results-list-item.closed .badge {
-	left: 5px;  /* this icon looks more centered when shifted left 1px */
+	left: 7px;
 }
 
 .results-list-item div.title, .results-list-item div.url {
@@ -385,27 +419,28 @@ img {
 }
 
 .results-list-item div.title-index {
-    font-size: 0.75em;
-    font-weight: bold;
+    font-size: 0.7em;
+    font-weight: 600;
     text-align: center;
-    color: var(--color, #666);
+    color: var(--color, #555);
     min-width: 1.5em;
-    height: 1.5em;
-    top: -0.1em;
-    background: var(--background, #efefef);
-    border-radius: .75em;
-    padding: .05em 0.4em 0 0.4em;
+    line-height: 1.5em;
+    top: -0.05em;
+    background: var(--background, #e8eaee);
+    border-radius: 4px;
+    padding: 0 0.4em;
     margin: 0 .5em 0 0;
     display: inline-block;
     position: relative;
+    vertical-align: middle;
 }
 
 .mac .results-list-item div.title-index {
-	padding-top: .15em;
+	line-height: 1.55em;
 }
 
 .results-list-item.selected div.title-index {
-	background: var(--background, #dbdbdb);
+	background: var(--background, #d5d7dc);
 }
 
 .results-list-item .close-button {
@@ -428,15 +463,16 @@ img {
 .results-list-item.selected:hover .close-button {
 	width: 24px;
 	height: 24px;
-	right: 6px;
+	right: 8px;
 	top: 50%;
 	margin-top: -12px;
 	background-color: transparent;
 	border: none;
-	opacity: .6;
-	border-radius: 50%;
+	opacity: .5;
+	border-radius: 6px;
 	position: absolute;
 	display: block;
+	transition: background-color 0.15s ease, opacity 0.15s ease;
 }
 
 .results-list-item.selected:hover .close-button:hover {
@@ -445,7 +481,7 @@ img {
 }
 
 .results-list-item.selected:hover .close-button:hover:active {
-	background-color: var(--background, #d1d1d1);
+	background-color: var(--background, #cdcdd0);
 }
 
 .results-list-item.message {
@@ -474,18 +510,19 @@ img {
 ::-webkit-scrollbar {
 	background: none !important;
 	overflow: visible;
-	width: 3px;
+	width: 5px;
 }
 
 ::-webkit-scrollbar-thumb {
-	background-color: var(--background, rgba(0, 0, 0, 0.05));
-	border: 1px solid transparent;
-	border-radius: 0;
-	width: 3px;
+	background-color: var(--background, rgba(0, 0, 0, 0.08));
+	border: none;
+	border-radius: 3px;
+	width: 5px;
+	transition: background-color 0.15s ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-	background-color: var(--background, rgba(0, 0, 0, 0.15));
+	background-color: var(--background, rgba(0, 0, 0, 0.2));
 }
 
 ::-webkit-scrollbar-thumb:horizontal {
