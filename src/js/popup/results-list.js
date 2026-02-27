@@ -1,6 +1,5 @@
 import React from "react";
-import {List} from "react-virtualized/dist/es/List";
-import handleRef from "@/lib/handle-ref";
+import {List} from "react-window";
 import {IsFirefox, ResultsListRowHeight} from "@/background/constants";
 
 
@@ -17,10 +16,41 @@ function getListWidth()
 }
 
 
+// row component for react-window v2
+// receives index, style, and all additional props passed via rowProps
+function Row({
+	index,
+	style,
+	itemComponent,
+	items,
+	query,
+	mode,
+	selectedIndex,
+	openItem,
+	closeTab,
+	onHover})
+{
+	const item = items[index];
+	const ItemComponent = item.component || itemComponent;
+
+	return <ItemComponent
+		item={item}
+		index={index}
+		query={query}
+		mode={mode}
+		isSelected={selectedIndex == index}
+		openItem={openItem}
+		closeTab={closeTab}
+		onHover={onHover}
+		style={style}
+	/>
+}
+
+
 export default class ResultsList extends React.Component {
     startIndex = 0;
     stopIndex = 0;
-    list = null;
+    listRef = React.createRef();
 	renderTimer = null;
 	hoverSelectEnabled = false;
 	listWidth = getListWidth();
@@ -52,10 +82,22 @@ export default class ResultsList extends React.Component {
 	{
 		const itemsChanged = prevProps.items !== this.props.items;
 
-		if (itemsChanged) {
-				// the virtual list doesn't know when the items have changed,
-				// so force it to update when they do
-			this.list.forceUpdateGrid();
+		if (itemsChanged || prevProps.selectedIndex !== this.props.selectedIndex) {
+				// react-window v2 uses imperative scrollToRow on the list ref
+			const {selectedIndex} = this.props;
+
+			if (this.listRef.current && selectedIndex >= 0 && selectedIndex < this.props.items.length) {
+				this.listRef.current.scrollToRow({
+					index: selectedIndex,
+					align: "smart"
+				});
+			}
+		}
+
+			// react-window v2 List is a function component that manages its own
+			// DOM ref internally; set tabIndex on it once available
+		if (this.listRef.current && this.listRef.current.element) {
+			this.listRef.current.element.tabIndex = -1;
 		}
 
 		if (itemsChanged || (!prevProps.visible && this.props.visible)) {
@@ -95,7 +137,9 @@ export default class ResultsList extends React.Component {
 	scrollToRow(
 		index)
 	{
-		this.list.scrollToRow(index);
+		if (this.listRef.current && index >= 0 && index < this.props.items.length) {
+			this.listRef.current.scrollToRow({ index, align: "smart" });
+		}
 	}
 
 
@@ -134,70 +178,62 @@ export default class ResultsList extends React.Component {
 	};
 
 
-	handleListRef = handleRef("list", this);
-
 
     handleRowsRendered = (
-		event) =>
+		visibleRows) =>
 	{
 			// track the visible rendered rows so we know how to change the
 			// selection when the App tells us to page up/down, since it
 			// doesn't know what's visible
-		this.startIndex = event.startIndex;
-		this.stopIndex = event.stopIndex;
+		this.startIndex = visibleRows.startIndex;
+		this.stopIndex = visibleRows.stopIndex;
 	};
 
 
-    rowRenderer = (
-		data) =>
+    render()
 	{
 		const {
+			items,
+			maxItems,
+			selectedIndex,
+			itemComponent,
+			query,
+			mode,
+			openItem,
+			closeTab
+		} = this.props;
+		const itemCount = items.length;
+		const height = Math.min(itemCount, maxItems) * ResultsListRowHeight;
+		const style = {
+			display: height ? "block" : "none",
+			width: this.listWidth
+		};
+
+			// pass all item-rendering data via rowProps so that react-window
+			// can detect changes and re-render rows automatically
+		const rowProps = {
 			itemComponent,
 			items,
 			query,
 			mode,
 			selectedIndex,
 			openItem,
-			closeTab
-		} = this.props;
-		const item = items[data.index];
-		const ItemComponent = item.component || itemComponent;
-
-		return <ItemComponent
-			key={data.key}
-			item={item}
-			index={data.index}
-			query={query}
-			mode={mode}
-			isSelected={selectedIndex == data.index}
-			openItem={openItem}
-			closeTab={closeTab}
-			onHover={this.handleItemHovered}
-			style={data.style}
-		/>
-	};
-
-
-    render()
-	{
-		const {items: {length: itemCount}, maxItems, selectedIndex} = this.props;
-		const height = Math.min(itemCount, maxItems) * ResultsListRowHeight;
-		const style = { display: height ? "block" : "none" };
+			closeTab,
+			onHover: this.handleItemHovered
+		};
 
 		return <div className="results-list-container"
 			style={style}
 		>
 			<List
-				ref={this.handleListRef}
+				listRef={this.listRef}
 				className="results-list"
-				tabIndex={-1}
-				width={this.listWidth}
-				height={height}
+				rowComponent={Row}
+				rowProps={rowProps}
 				rowCount={itemCount}
 				rowHeight={ResultsListRowHeight}
-				rowRenderer={this.rowRenderer}
-				scrollToIndex={selectedIndex}
 				onRowsRendered={this.handleRowsRendered}
+				style={{ height }}
 			/>
 		</div>
 	}
