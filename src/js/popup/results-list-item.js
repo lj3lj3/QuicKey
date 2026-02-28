@@ -3,6 +3,7 @@ import {
 	HistoryIcon,
 	IncognitoIcon,
 	WindowIcon,
+	BookmarkIcon,
 	ClearIcon
 } from "@/common/icons";
 import copyTextToClipboard from "@/lib/copy-to-clipboard";
@@ -96,6 +97,7 @@ export default class ResultsListItem extends React.Component {
 			otherWindow,
 			incognito
 		} = item;
+		const isOpenTab = !sessionId && !item.source && (mode === "tabs");
 		const className = [
 			"results-list-item",
 			mode,
@@ -103,7 +105,8 @@ export default class ResultsListItem extends React.Component {
 			unsuspendURL ? "suspended" : "",
 			incognito ? "incognito" :
 				(otherWindow ? "other-window" : ""),
-			sessionId ? "closed" : ""
+			sessionId ? "closed" : "",
+			!isOpenTab ? "not-open" : ""
 		].join(" ");
 		const faviconStyle = {
 			backgroundImage: `url(${faviconURL})`
@@ -150,6 +153,12 @@ export default class ResultsListItem extends React.Component {
 		} else if (sessionId) {
 			badge = <HistoryIcon />;
 			badgeTooltip = "This tab was closed recently";
+		} else if (item.source === "history") {
+			badge = <HistoryIcon />;
+			badgeTooltip = "This result is from browsing history";
+		} else if (item.source === "bookmarks") {
+			badge = <BookmarkIcon />;
+			badgeTooltip = "This result is from bookmarks";
 		}
 
 		return <div className={className}
@@ -158,15 +167,14 @@ export default class ResultsListItem extends React.Component {
 			onClick={this.onClick}
 			onMouseMove={this.handleMouseMove}
 		>
-			<div className="favicon"
+		<div className="favicon"
 				style={faviconStyle}
 			/>
-			<div className="badge"
-				title={badgeTooltip}
-			>
-				{badge}
-			</div>
 			<div className="title">
+				{badge &&
+					<span className="title-badge"
+						title={badgeTooltip}
+					>{badge}</span>}
 				{titleIndex &&
 					<div className="title-index"
 						title="Position among tabs with the same title"

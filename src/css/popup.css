@@ -12,7 +12,7 @@
 		--fill: #aaa;
 	}
 
-	.history.icon, .window.icon, .incognito.icon, .ff-private.icon {
+	.history.icon, .window.icon, .incognito.icon, .ff-private.icon, .bookmark.icon {
 		--fill: #777;
 	}
 
@@ -141,7 +141,7 @@ img {
 	fill: var(--fill, #888);
 }
 
-.history.icon, .window.icon, .incognito.icon, .ff-private.icon {
+.history.icon, .window.icon, .incognito.icon, .ff-private.icon, .bookmark.icon {
 	fill: var(--fill, #bbb);
 }
 
@@ -356,7 +356,7 @@ img {
 	background-color: var(--background, #e8eaee);
 }
 
-.results-list-item .favicon, .results-list-item .badge {
+.results-list-item .favicon {
 	left: 8px;
 	top: 50%;
 	transform: translateY(-50%);
@@ -371,14 +371,21 @@ img {
 	opacity: 0.4;
 }
 
-.results-list-item .badge {
-	top: auto;
-	bottom: 5px;
-	transform: none;
+.results-list-item .title-badge {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 1.3em;
+	height: 1.3em;
+	margin-right: 0.35em;
+	vertical-align: middle;
+	position: relative;
+	top: -0.05em;
 }
 
-.results-list-item.closed .badge {
-	left: 7px;
+.results-list-item .title-badge .icon {
+	width: 100%;
+	height: 100%;
 }
 
 .results-list-item div.title, .results-list-item div.url {
@@ -415,6 +422,18 @@ img {
 }
 
 .results-list-item.closed div.url {
+	opacity: 0.45;
+}
+
+.results-list-item.not-open:not(.closed) .favicon {
+	opacity: 0.4;
+}
+
+.results-list-item.not-open:not(.closed) div.title {
+	opacity: 0.6;
+}
+
+.results-list-item.not-open:not(.closed) div.url {
 	opacity: 0.45;
 }
 
