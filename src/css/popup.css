@@ -255,20 +255,17 @@ img {
 	top: 0;
 	left: 0;
 	position: absolute;
-	border: none;
+	border: 1px solid transparent;
 	background: none;
+	display: flex;
+	align-items: center;
 		/* rules below are copied from the input placeholder CSS */
-	line-height: initial;
 	white-space: pre;
 	word-wrap: normal;
 	-webkit-user-modify: read-only;
 	overflow: hidden;
 	-webkit-text-security: none;
 	pointer-events: none;
-}
-
-.win .command-placeholder {
-	padding-top: 1px;
 }
 
 .command-placeholder b {

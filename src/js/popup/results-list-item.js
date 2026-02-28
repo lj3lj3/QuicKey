@@ -20,6 +20,7 @@ const SuspendedFaviconOpacity = .5;
 const FaviconURL = "chrome://favicon/";
 const CloseButtonTooltips = {
 	tabs: "Close tab",
+	openTabs: "Close tab",
 	bookmarks: "Delete bookmark",
 	closedTab: "Remove this closed tab from the browser history",
 	history: "Remove this page from the browser history"
@@ -97,7 +98,7 @@ export default class ResultsListItem extends React.Component {
 			otherWindow,
 			incognito
 		} = item;
-		const isOpenTab = !sessionId && !item.source && (mode === "tabs");
+		const isOpenTab = !sessionId && !item.source && (mode === "tabs" || mode === "openTabs");
 		const className = [
 			"results-list-item",
 			mode,

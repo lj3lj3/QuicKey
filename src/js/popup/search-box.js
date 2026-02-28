@@ -97,8 +97,10 @@ export default class SearchBox extends React.Component {
 				<Placeholder mode={mode} shortcut="/b" text="Search for a bookmark title or URL" />}
 			{mode == "history" && query.length == 3 &&
 				<Placeholder mode={mode} shortcut="/h" text="Search for a title or URL from the browser history" />}
+			{mode == "openTabs" && query.length == 3 &&
+				<Placeholder mode={mode} shortcut="/t" text="Search only open tabs" />}
 			{mode == "command" &&
-				<Placeholder mode={mode} shortcut="/b" text="Type b for bookmark search or h for history, then a space" />}
+				<Placeholder mode={mode} shortcut="/b" text="Type b for bookmarks, h for history, or t for open tabs, then a space" />}
 			{(IsFirefox && query.length > 0) &&
 				<div
 					className="cancel-button"

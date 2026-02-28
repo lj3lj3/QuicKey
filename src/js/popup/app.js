@@ -31,7 +31,8 @@ const MinItems = 4;
 const MinScoreDiff = .1;
 const BookmarksQuery = "/b ";
 const HistoryQuery = "/h ";
-const CommandQueryPattern = /^\/[bh]?$/i;
+const TabsOnlyQuery = "/t ";
+const CommandQueryPattern = /^\/[bht]?$/i;
 const NoRecentTabsMessage = [{
 	message: "Recently used tabs will appear here as you continue browsing",
 	faviconURL: "img/alert.svg",
@@ -147,6 +148,7 @@ export default class App extends React.Component {
 			// this array is always empty, and is only used by getMatchingItems()
 			// when a / is typed and the mode is "command"
 		this.command = [];
+		this.openTabs = [];
 		this.settings = settings.getDefaults();
 		this.settingsPromise = this.updateSettings();
 			// we're saving the initial value of this prop instead of
@@ -461,6 +463,13 @@ export default class App extends React.Component {
 					"history"
 				);
 			}
+		} else if (searchBoxTextLC.indexOf(TabsOnlyQuery) == 0) {
+			this.mode = "openTabs";
+			query = searchBoxText.slice(TabsOnlyQuery.length);
+
+			if (!this.openTabs.length) {
+				this.openTabs = this.tabs.filter(tab => !tab.sessionId);
+			}
 		} else if (CommandQueryPattern.test(searchBoxText)) {
 				// we don't know if the user's going to type b or h, so
 				// don't match any items
@@ -522,13 +531,16 @@ export default class App extends React.Component {
 				this.mode == "tabs" ||
 				this.mode == "command" ||
 				searchBoxTextLC == BookmarksQuery ||
-				searchBoxTextLC == HistoryQuery
+				searchBoxTextLC == HistoryQuery ||
+				searchBoxTextLC == TabsOnlyQuery
 			) {
 				searchBoxText = "";
 			} else if (this.mode == "bookmarks") {
 				searchBoxText = BookmarksQuery;
 			} else if (this.mode == "history") {
 				searchBoxText = HistoryQuery;
+			} else if (this.mode == "openTabs") {
+				searchBoxText = TabsOnlyQuery;
 			}
 
 				// scroll the list back to the first row, which wouldn't
@@ -605,6 +617,10 @@ export default class App extends React.Component {
 						// been cleared when we get here
 					return this.recents;
 
+				case "openTabs":
+						// return all open tabs sorted by recent usage
+					return this.openTabs;
+
 				case "history":
 						// special case the /h query so that we can sort the
 						// history items by visit date and show them as soon
@@ -623,7 +639,8 @@ export default class App extends React.Component {
 		// apply adaptive history boosts for URL-based modes
 		if (this.isEnhancedSearchEnabled()
 				&& query
-				&& (this.mode === "tabs" || this.mode === "history"
+				&& (this.mode === "tabs" || this.mode === "openTabs"
+					|| this.mode === "history"
 					|| this.mode === "bookmarks")) {
 			const boosts = adaptiveHistory.getBoosts(query, this.mode);
 
@@ -668,7 +685,8 @@ export default class App extends React.Component {
 			// record adaptive history for all URL-based modes
 			if (this.isEnhancedSearchEnabled()
 					&& this.state.query
-					&& (this.mode === "tabs" || this.mode === "history"
+					&& (this.mode === "tabs" || this.mode === "openTabs"
+						|| this.mode === "history"
 						|| this.mode === "bookmarks")) {
 				const recordMode = item.source || this.mode;
 
@@ -685,7 +703,7 @@ export default class App extends React.Component {
 				// them, instead of the popup being second on the list.
 			await this.blurPopupWindow();
 
-		if (this.mode == "tabs" && !item.source) {
+	if ((this.mode == "tabs" || this.mode == "openTabs") && !item.source) {
 				if (item.sessionId) {
 						// this is a closed tab, so restore it
 					tabOrWindow = await this.sendMessage("restoreSession",
@@ -784,7 +802,7 @@ export default class App extends React.Component {
 
 
 		if (item) {
-			if (mode == "tabs" && item.source) {
+			if ((mode == "tabs" || mode == "openTabs") && item.source) {
 					// hybrid mode: item from history or bookmarks
 				if (item.source === "history") {
 					const url = item.originalURL || item.url;
@@ -799,7 +817,7 @@ export default class App extends React.Component {
 						deleteItem(({id}) => chrome.bookmarks.remove(id));
 					}
 				}
-			} else if (mode == "tabs") {
+			} else if (mode == "tabs" || mode == "openTabs") {
 				if (!isNaN(item.id)) {
 						// the onTabRemoved handler below will re-init the
 						// list, which will then show the tab as closed
@@ -1148,6 +1166,7 @@ export default class App extends React.Component {
 			this.bookmarksPromise = null;
 			this.history = [];
 			this.historyPromise = null;
+			this.openTabs = [];
 
 				// if we're being closed by esc, not by losing focus or by
 				// focusing another tab, then in addition to moving off

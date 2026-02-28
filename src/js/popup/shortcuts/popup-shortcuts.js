@@ -101,7 +101,7 @@ function moveTab(
 	direction,
 	shiftKey)
 {
-	if (self.mode == "tabs") {
+	if (self.mode == "tabs" || self.mode == "openTabs") {
 		self.moveTab(selectedTab(), direction, shiftKey);
 	}
 }
