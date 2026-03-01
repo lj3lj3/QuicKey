@@ -80,6 +80,8 @@ If you enable the option to show the number of open tabs on the *QuicKey* icon, 
 
 Unlike other tab switchers, *QuicKey* uses a [Quicksilver](https://qsapp.com/)-style search algorithm to rank the results, where contiguous matches at the beginning of words are higher in the list, as are matches against capital letters.  So you only have to type a few letters to quickly find the right tab.
 
+If a tab belongs to a **tab group**, the group name and its color will be displayed next to the tab title. You can also search by the group name to quickly find all tabs in a specific group.
+
 Use keyboard shortcuts to navigate the list of matching tabs:
 
   * <kbd>enter</kbd>&nbsp;: switch to the selected tab
@@ -94,6 +96,18 @@ Use keyboard shortcuts to navigate the list of matching tabs:
 If you type more than 25 letters, which should be plenty to find the right tab, *QuicKey* switches to an exact string search to stay fast.
 
 Recently used tabs get a slight boost in the search results ranking, so getting back to a tab you were just using should require typing fewer letters.
+
+
+## Enhanced search
+
+Enable **Enhanced search** on the Options page to let *QuicKey* learn from your search selections and provide better results over time.  When enabled, *QuicKey* uses adaptive history and frecency scoring to rank pages you visit frequently or recently higher in the results.
+
+You can also configure the **default search scope** to include not just tabs, but also history and bookmarks in every search — without needing to type the `/h` or `/b` prefix:
+
+  * **Tabs only** (default)
+  * **Tabs + History**
+  * **Tabs + Bookmarks**
+  * **Tabs + History + Bookmarks**
 
 
 ## Customize shortcuts and other options
@@ -163,6 +177,13 @@ The same <b><kbd>ctrl</kbd><kbd>enter</kbd></b> (<b><kbd>cmd</kbd><kbd>enter</kb
 As soon as you type <b><kbd>/</kbd><kbd>h</kbd><kbd>space</kbd></b>, the pages from your history will be listed in order of recency, so you can get back to a page you had recently visited without having to remember its name.
 
 
+## Unlimited history
+
+By default, *QuicKey* searches the last 2000 pages in your browser history. If you want access to more, you can enable **Unlimited history** on the Options page under the *History* section.
+
+When enabled, *QuicKey* uses IndexedDB to persistently store your browsing history beyond Chrome's default limits. It automatically captures new visits and supports importing your existing Chrome history. You can view storage stats, import history, and clear the data from the Options page.
+
+
 ## Delete bookmarks and history items
 
 To delete the selected bookmark or history item, press <b><kbd>ctrl</kbd><kbd>W</kbd></b> (<b><kbd>cmd</kbd><kbd>ctrl</kbd><kbd>W</kbd></b> on macOS). Or hover over an item and click the <img src="docs/img/clear.svg" height="16"> button on the right side of the menu. You'll be asked to confirm the deletion of bookmarks.
@@ -185,7 +206,7 @@ Tabs in incognito mode display the incognito icon under the page's favicon, so y
 
 ## Dark mode
 
-*QuicKey* will respond to changes in your computer's dark mode setting with darker colors that match your browser's user interface.
+*QuicKey* will respond to changes in your computer's dark mode setting with darker colors that match your browser's user interface.  The popup UI features a modernized design with refined search box, list items and scrollbar styles in both light and dark modes.
 
 <img src="docs/img/dark-mode.png" width="522">
 
@@ -217,6 +238,11 @@ If you right-click the *QuicKey* icon on the toolbar, there's a message saying *
 ## Feedback and support
 
 If you find a bug in *QuicKey* or have a suggestion for a new feature, please [create a new issue](https://github.com/fwextensions/QuicKey/issues/new) on its GitHub page.
+
+
+## Performance
+
+*QuicKey* is optimized for fast popup loading, especially in <b><kbd>ctrl</kbd><kbd>tab</kbd></b> mode.  Settings, active tab, and cached tab data are loaded in parallel, and background caching with smart invalidation ensures the MRU list appears instantly.  The popup also uses [react-window](https://github.com/bvaughn/react-window) for efficient virtualized rendering of long tab lists.
 
 
 ## Release history
