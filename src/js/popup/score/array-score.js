@@ -102,12 +102,12 @@ export default function(
 	{
 		for (const item of items) {
 				// find the highest score for each keyed string on this item
-			item.score = keys.reduce((currentScore, {key, score}) => {
+			item.score = keys.reduce((currentScore, {key, score, weight}) => {
 				const hitMask = [];
 				const string = item[key];
 					// score empty strings as 0
 				const newScore = string
-					? score(string, query, hitMask) * (item.recentBoost || 1)
+					? score(string, query, hitMask) * (weight || 1) * (item.recentBoost || 1)
 					: 0;
 
 				item.scores[key] = newScore;
@@ -136,17 +136,18 @@ export default function(
 					// handle missing keys in Math.max() below
 				const tokenScores = new Array(tokens.length).fill(0);
 
-				for (const { key, score } of keys) {
+				for (const { key, score, weight } of keys) {
 					const hitMask = [];
 					let string = item[key];
 					let keyScore = 0;
+					const keyWeight = weight || 1;
 
 						// empty strings will get a score of 0
 					if (string) {
 						for (let i = 0, len = tokens.length; i < len; i++) {
 							const token = tokens[i];
 							const tokenMatches = [];
-							const tokenScore = score(string, token, tokenMatches);
+							const tokenScore = score(string, token, tokenMatches) * keyWeight;
 
 							if (tokenScore) {
 								string = replaceMatches(string, tokenMatches);

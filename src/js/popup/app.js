@@ -5,7 +5,7 @@ import ResultsListItem from "./results-list-item";
 import MessageItem from "./message-item";
 import OptionsButton from "./options-button";
 import { connectPopupWindow } from "./popup-window";
-import scoreItems from "./score/score-items";
+import scoreItems, { setGroupTitlePriority } from "./score/score-items";
 import initTabs from "./data/init-tabs";
 import getBookmarks from "./data/get-bookmarks";
 import getHistory from "./data/get-history";
@@ -1050,6 +1050,8 @@ export default class App extends React.Component {
 				// add the pinyin translations
 			await loadPinyin();
 		}
+
+		setGroupTitlePriority(this.settings[k.GroupTitleHighPriority.Key]);
 
 		return this.settings;
 	}

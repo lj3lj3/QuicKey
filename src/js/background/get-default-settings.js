@@ -34,6 +34,7 @@ const DefaultSettings = {
 	[k.NavigateRecentsWithPopup.Key]: true,
 	[k.EnableUnlimitedHistory.Key]: false,
 	[k.EnableEnhancedSearch.Key]: false,
+	[k.GroupTitleHighPriority.Key]: false,
 	[k.DefaultSearchScope.Key]: k.DefaultSearchScope.Tabs,
 	[k.Shortcuts.Key]: {
 		mac: MacDefaults,

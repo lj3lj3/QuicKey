@@ -285,9 +285,17 @@ const t = performance.now();
 				? Promise.resolve(cachedTabData.sessions)
 				: chrome.sessions.getRecentlyClosed())
 			: Promise.resolve([]);
+		const groupsPromise = chrome.tabGroups
+			? chrome.tabGroups.query({})
+			: Promise.resolve([]);
 
-		return Promise.all([tabsPromise, sessionsPromise])
-			.then(([freshTabs, closedTabs]) => {
+		return Promise.all([tabsPromise, sessionsPromise, groupsPromise])
+			.then(([freshTabs, closedTabs, tabGroups]) => {
+				const groupsMap = {};
+
+				tabGroups.forEach(g => {
+					groupsMap[g.id] = { title: g.title || "", color: g.color };
+				});
 				const {tabIDs} = data;
 				const tabsByURL = {};
 				const {tabsByID} = data;
@@ -310,6 +318,11 @@ const t = performance.now();
 							// be able to match it by URL.
 						tabsByID[id] = createRecent(tab, oldTab);
 						lastVisit = tabsByID[id].lastVisit;
+					}
+
+					if (tab.groupId && tab.groupId !== -1 && groupsMap[tab.groupId]) {
+						tab.groupTitle = groupsMap[tab.groupId].title;
+						tab.groupColor = groupsMap[tab.groupId].color;
 					}
 
 					tab.lastVisit = lastVisit;

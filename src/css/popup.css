@@ -87,6 +87,10 @@
 		--background: #666;
 	}
 
+	.results-list-item .group-tag {
+		opacity: 0.85;
+	}
+
 	::-webkit-scrollbar-thumb, .firefox .results-list {
 		--background: rgba(255, 255, 255, .12);
 	}
@@ -458,6 +462,42 @@ img {
 .results-list-item.selected div.title-index {
 	background: var(--background, #d5d7dc);
 }
+
+/* tab group tag - same style as title-index */
+.results-list-item .group-tag {
+	font-size: 0.7em;
+	font-weight: 600;
+	text-align: center;
+	min-width: 1.5em;
+	line-height: 1.5em;
+	top: -0.05em;
+	border-radius: 4px;
+	padding: 0 0.4em;
+	margin: 0 .5em 0 0;
+	display: inline-block;
+	position: relative;
+	vertical-align: middle;
+	color: #fff;
+	max-width: 8em;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.mac .results-list-item .group-tag {
+	line-height: 1.55em;
+}
+
+/* Chrome tab group predefined colors */
+.group-color-grey   { background-color: #5f6368; }
+.group-color-blue   { background-color: #1a73e8; }
+.group-color-red    { background-color: #d93025; }
+.group-color-yellow { background-color: #f9ab00; color: #333; }
+.group-color-green  { background-color: #1e8e3e; }
+.group-color-pink   { background-color: #d01884; }
+.group-color-purple { background-color: #a142f4; }
+.group-color-cyan   { background-color: #007b83; }
+.group-color-orange { background-color: #e8710a; }
 
 .results-list-item .close-button {
 	outline: none;

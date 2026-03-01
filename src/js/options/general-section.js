@@ -73,6 +73,19 @@ export default function GeneralSection()
 					onChange={onChange}
 				/>
 			</NewSetting>
+			<NewSetting addedVersion={17}>
+				<Checkbox
+					id={k.GroupTitleHighPriority.Key}
+					label="Prioritize tab group names in search results"
+					value={settings[k.GroupTitleHighPriority.Key]}
+					onChange={onChange}
+				>
+					<div className="subtitle">
+						When enabled, tabs matching a group name will be ranked
+						higher in search results.
+					</div>
+				</Checkbox>
+			</NewSetting>
 
 
 			<h2>Multiple browser windows</h2>

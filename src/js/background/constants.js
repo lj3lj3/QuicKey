@@ -113,3 +113,6 @@ export const DefaultSearchScope = {
 	TabsBookmarks: "tabs+bookmarks",
 	All: "tabs+history+bookmarks"
 };
+export const GroupTitleHighPriority = {
+	Key: "groupTitleHighPriority"
+};

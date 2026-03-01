@@ -89,6 +89,8 @@ export default class ResultsListItem extends React.Component {
 			hitMasks,
 			title,
 			titleIndex,
+			groupTitle,
+			groupColor,
 			displayURL,
 			unsuspendURL,
 			faviconURL,
@@ -180,6 +182,14 @@ export default class ResultsListItem extends React.Component {
 					<div className="title-index"
 						title="Position among tabs with the same title"
 					>{titleIndex}</div>}
+				{groupTitle &&
+					<div className={`group-tag group-color-${groupColor || "grey"}`}
+					><MatchedString
+						query={query}
+						text={groupTitle}
+						score={scores.groupTitle}
+						hitMask={hitMasks.groupTitle}
+					/></div>}
 				<MatchedString
 					query={query}
 					text={title}
