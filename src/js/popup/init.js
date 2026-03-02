@@ -30,6 +30,19 @@ let gKeyCache = [];
 let gShortcutCache = [];
 let gClose = false;
 let gOnKeyDown;
+let gPrefetchedData = null;
+let gPrefetchedFrecencyMap = null;
+
+	// listen for prefetched data pushed from background before the main
+	// bundle finishes loading, so the data is ready when App initializes.
+	// frecencyMap arrives separately to avoid blocking the main data push.
+gPort.onMessage.addListener(msg => {
+	if (msg?.message === "prefetchedData") {
+		gPrefetchedData = msg;
+	} else if (msg?.message === "prefetchedFrecencyMap") {
+		gPrefetchedFrecencyMap = msg.frecencyMap;
+	}
+});
 
 	// check lastError to suppress errors showing up in the extensions page
 chrome.runtime.lastError && console.log("Chrome error:", chrome.runtime.lastError);

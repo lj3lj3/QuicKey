@@ -6,7 +6,7 @@ import MessageItem from "./message-item";
 import OptionsButton from "./options-button";
 import { connectPopupWindow } from "./popup-window";
 import scoreItems, { setGroupTitlePriority, scoreItemsAsync } from "./score/score-items";
-import initTabs from "./data/init-tabs";
+import initTabs, { enrichWithFrecency } from "./data/init-tabs";
 import getBookmarks from "./data/get-bookmarks";
 import getHistory from "./data/get-history";
 import addURLs from "./data/add-urls";
@@ -118,6 +118,9 @@ export default class App extends React.Component {
 	settings = null;
 	settingsPromise = null;
 	lastStorageData = null;
+	prefetchedData = null;
+	pendingFrecencyMap = null;
+	frecencyApplied = false;
 	cachedActiveTab = null;
 	className = "";
 	popupTabID = -1;
@@ -152,6 +155,7 @@ export default class App extends React.Component {
 		this.command = [];
 		this.openTabs = [];
 		this.settings = settings.getDefaults();
+		this.prefetchedData = props.prefetchedData || null;
 		this.settingsPromise = this.updateSettings();
 			// we're saving the initial value of this prop instead of
 			// getting it every time in render, which is normally bad, but
@@ -194,7 +198,8 @@ export default class App extends React.Component {
 				// initial query or if the popup was opened in nav mode
 			selected: (query || !this.openedForSearch || this.navigatingRecents) ? 0 : -1,
 			newSettingsAvailable: false,
-			searching: false
+			searching: false,
+			sortingFrecency: false
 		};
 	}
 
@@ -364,15 +369,29 @@ export default class App extends React.Component {
 				// parallel instead of serial awaits to reduce total loading time.
 				// getCachedTabs fetches pre-loaded tab/session data from background
 				// to avoid redundant chrome.tabs.query/sessions API calls.
-			const cachedTabsPromise = this.props.isPopup
-				? this.sendMessage("getCachedTabs")
-				: Promise.resolve(null);
+				// use prefetched tabs/sessions from background if available,
+				// to skip the getCachedTabs message round-trip IPC
+			const cachedTabsPromise = this.prefetchedData
+				? Promise.resolve({
+					tabs: this.prefetchedData.tabs,
+					sessions: this.prefetchedData.sessions
+				})
+				: (this.props.isPopup
+					? this.sendMessage("getCachedTabs")
+					: Promise.resolve(null));
 
 			const [settings, activeTab, cachedTabData] = await Promise.all([
 				this.settingsPromise,
 				this.getActiveTab(),
 				cachedTabsPromise
 			]);
+
+				// clear prefetched data after first use to avoid stale data
+				// on subsequent reloads or re-renders
+			this.prefetchedData = null;
+
+				// reset frecency state for this load cycle
+			this.frecencyApplied = false;
 
 				// pass pre-fetched storage data and cached tab data to
 				// recentTabs.getAll() to avoid redundant API calls
@@ -389,8 +408,7 @@ export default class App extends React.Component {
 					// null so initTabs() doesn't filter it out
 				this.navigatingRecents ? null : activeTab,
 				settings[k.MarkTabsInOtherWindows.Key],
-				settings[k.UsePinyin.Key],
-				this.isEnhancedSearchEnabled()
+				settings[k.UsePinyin.Key]
 			);
 			const currentWindowID = activeTab && activeTab.windowId;
 				// this promise chain starts with settingsPromise, so by
@@ -431,7 +449,17 @@ export default class App extends React.Component {
 		};
 
 			// pass true to always force a reload
-		return this.loadPromisedItems(loader, "tabs", true);
+		return this.loadPromisedItems(loader, "tabs", true)
+			.then(tabs => {
+					// after the initial render without frecency, try to apply
+					// frecency asynchronously so the list appears immediately
+				if (this.isEnhancedSearchEnabled()) {
+					this.setState({ sortingFrecency: true });
+					this.applyFrecencyAsync();
+				}
+
+				return tabs;
+			});
 	};
 
 
@@ -1126,7 +1154,13 @@ export default class App extends React.Component {
 
 	async updateSettings()
 	{
-		const data = await storage.get();
+			// use prefetched storage data from background if available,
+			// to skip the expensive navigator.locks + chrome.storage IPC.
+			// always await to ensure setState() below runs after the
+			// constructor finishes and this.state has been assigned.
+		const data = await (this.prefetchedData?.storageData
+			? Promise.resolve(this.prefetchedData.storageData)
+			: storage.get());
 
 			// save storage data so it can be reused by recentTabs.getAll()
 			// to avoid a redundant storage.get() call
@@ -1149,21 +1183,24 @@ export default class App extends React.Component {
 			this.setSearchBoxText("");
 		}
 
-			// pass the data we got from storage to settings so it
-			// doesn't have to get its own copy of it
-		this.settings = await settings.get(data);
+		// run settings.get() and loadPinyin() in parallel, since they
+			// both only depend on storage data and are independent of each
+			// other.  use the raw usePinyin flag from storage data to start
+			// loading pinyin early, instead of waiting for settings.get()
+			// to finish (which does an extra chrome.commands.getAll() IPC).
+		const settingsPromise = settings.get(data);
+		const pinyinPromise = data.settings[k.UsePinyin.Key]
+			? loadPinyin()
+			: Promise.resolve();
+
+		const [resolvedSettings] = await Promise.all([settingsPromise, pinyinPromise]);
+
+		this.settings = resolvedSettings;
 		shortcuts.update(this.settings);
 
 			// update the modifier event name based on the latest settings, in
 			// case the keyboard shortcut has been changed
 		this.updateMRUModifier();
-
-		if (this.settings.usePinyin) {
-				// searching by pinyin is enabled, so load the lib now, so
-				// that it's available by the time we init all the tabs and
-				// add the pinyin translations
-			await loadPinyin();
-		}
 
 		setGroupTitlePriority(this.settings[k.GroupTitleHighPriority.Key]);
 
@@ -1326,6 +1363,39 @@ export default class App extends React.Component {
 				// them, instead of the popup being second on the list.
 			this.ignoreNextBlur = true;
 			await popupWindow.blur();
+		}
+	}
+
+
+	applyFrecencyAsync()
+	{
+		if (this.frecencyApplied) {
+			return;
+		}
+
+			// check if a prefetched frecencyMap is available (from props
+			// or from a port message that arrived while loading tabs)
+		const frecencyMap = this.pendingFrecencyMap
+			|| this.props.prefetchedFrecencyMap
+			|| null;
+
+		if (frecencyMap) {
+				// apply the prefetched map synchronously and re-render
+			this.frecencyApplied = true;
+			this.pendingFrecencyMap = null;
+			enrichWithFrecency(this.tabs, frecencyMap);
+			this.setState({ sortingFrecency: false });
+			this.setQuery(this.state.query);
+		} else {
+				// no prefetched map available yet; fall back to the
+				// async chrome.history.search path, which runs N IPC
+				// calls but does not block the initial render
+			this.frecencyApplied = true;
+			enrichWithFrecency(this.tabs, null)
+				.then(() => {
+					this.setState({ sortingFrecency: false });
+					this.setQuery(this.state.query);
+				});
 		}
 	}
 
@@ -1515,9 +1585,20 @@ export default class App extends React.Component {
 				this.navigatingRecents = false;
 				break;
 
-			case "focusSearch":
+		case "focusSearch":
 				this.gotMRUKey = false;
 				this.tabsPromise.then(() => this.setState({ selected: -1 }));
+				break;
+
+			case "prefetchedFrecencyMap":
+					// frecencyMap arrived from background after initial render;
+					// store it and apply if tabs are already loaded
+				if (!this.frecencyApplied && this.isEnhancedSearchEnabled()) {
+					this.pendingFrecencyMap = payload.frecencyMap;
+					if (this.tabs.length) {
+						this.applyFrecencyAsync();
+					}
+				}
 				break;
 		}
 	};
@@ -1575,7 +1656,8 @@ export default class App extends React.Component {
 			matchingItems,
 			selected,
 			newSettingsAvailable,
-			searching
+			searching,
+			sortingFrecency
 		} = this.state;
 
 		return <div className={this.className}>
@@ -1586,7 +1668,7 @@ export default class App extends React.Component {
 				forceUpdate={this.forceUpdate}
 				selectAll={this.selectAllSearchBoxText}
 				query={searchBoxText}
-				searching={searching}
+				searching={searching || sortingFrecency}
 				onChange={this.onQueryChange}
 				onKeyDown={this.onKeyDown}
 				onKeyUp={this.onKeyUp}

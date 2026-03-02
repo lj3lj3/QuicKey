@@ -10,6 +10,7 @@ import trackers from "@/background/page-trackers";
 import { debounce } from "@/background/debounce";
 import historyDB from "@/background/history-db";
 import * as k from "@/background/constants";
+import {calculateFrecencyBoost} from "@/popup/score/frecency";
 
 if (globalThis.DEBUG) {
 	globalThis.printTabs = recentTabs.print;
@@ -76,6 +77,8 @@ let cachedTabs = null;
 let cachedSessions = null;
 const TabCacheMaxAge = 2000;
 let tabCacheTime = 0;
+let prefetchedStoragePromise = null;
+let prefetchedFrecencyPromise = null;
 
 
 function invalidateTabCache()
@@ -460,8 +463,41 @@ function disableCommands()
 	// to select the currently focused tab
 popupWindow.on(["hide", "close"], () => navigatingRecents = false);
 
-	// refresh tab cache before popup opens so data is ready
-popupWindow.on("create", () => refreshTabCache());
+	// refresh tab cache and prefetch storage data before popup opens
+	// so data is ready to push as soon as popup connects
+popupWindow.on("create", () => {
+	refreshTabCache();
+	prefetchedStoragePromise = chrome.storage.local.get(null)
+		.then(result => result?.data)
+		.catch(() => null);
+
+		// prefetch frecency data by querying chrome.history for each open tab.
+		// this runs in parallel with popup.js compilation, so the data is ready
+		// by the time the popup needs it, avoiding N IPC calls on the popup side.
+	if (enableEnhancedSearch) {
+		prefetchedFrecencyPromise = (cachedTabs || chrome.tabs.query({}))
+			.then(tabs => {
+				const queries = tabs.map(tab =>
+					chrome.history.search({ text: tab.url, maxResults: 1, startTime: 0 })
+						.then(results => {
+							const match = results.find(r => r.url === tab.url);
+							if (match && match.visitCount && match.lastVisitTime) {
+								return { url: tab.url, boost: calculateFrecencyBoost(match) };
+							}
+							return null;
+						})
+						.catch(() => null)
+				);
+				return Promise.all(queries);
+			})
+			.then(results => {
+				const map = {};
+				results.forEach(r => r && (map[r.url] = r.boost));
+				return map;
+			})
+			.catch(() => null);
+	}
+});
 
 
 chrome.tabs.onActivated.addListener(event => {
@@ -563,6 +599,55 @@ chrome.runtime.onConnect.addListener(port => {
 		// false here in case the user opens the menu before that happens.
 	startingUp = false;
 	ports[port.name] = port;
+
+	if (port.name === "popup" || port.name === "menu") {
+			// push prefetched data (tabs, sessions, storage) to popup so it
+			// doesn't have to make separate IPC calls for each one
+		const tabsPromise = cachedTabs || chrome.tabs.query({});
+		const sessionsPromise = cachedSessions || chrome.sessions.getRecentlyClosed();
+		const storagePromise = prefetchedStoragePromise || chrome.storage.local.get(null)
+			.then(result => result?.data)
+			.catch(() => null);
+
+		Promise.all([tabsPromise, sessionsPromise, storagePromise])
+			.then(([tabs, sessions, storageData]) => {
+				try {
+					port.postMessage({
+						message: "prefetchedData",
+						tabs,
+						sessions,
+						storageData
+					});
+				} catch (e) {
+					// port may have been disconnected if popup closed quickly
+				}
+			})
+			.finally(() => {
+				prefetchedStoragePromise = null;
+			});
+
+			// push frecencyMap separately so it doesn't block the main
+			// data delivery. popup can start rendering tabs immediately
+			// and apply frecency sorting when this arrives.
+		const frecencyPromise = prefetchedFrecencyPromise || Promise.resolve(null);
+
+		frecencyPromise
+			.then(frecencyMap => {
+				if (frecencyMap) {
+					try {
+						port.postMessage({
+							message: "prefetchedFrecencyMap",
+							frecencyMap
+						});
+					} catch (e) {
+						// port may have been disconnected if popup closed quickly
+					}
+				}
+			})
+			.finally(() => {
+				prefetchedFrecencyPromise = null;
+			});
+	}
 
 	if (port.name == "menu") {
 		disableCommands();
@@ -698,6 +783,10 @@ chrome.runtime.getContexts({ contextTypes: [chrome.runtime.ContextType.TAB] })
 			// check that the popup window is open, and not just the Options tab
 		if (initialViews.some(isPopupWindow)) {
 			const popupPort = chrome.runtime.connect({ name: "popup" });
+
+				// check lastError to suppress "Could not establish connection"
+				// errors when the popup has closed before the connection completes
+			popupPort.onDisconnect.addListener(() => chrome.runtime.lastError);
 
 				// generate a connect event with this new port.  if there's no popup
 				// window for it connect to, it'll immediately close.

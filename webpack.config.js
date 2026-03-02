@@ -9,7 +9,6 @@ const {CleanWebpackPlugin} = require("clean-webpack-plugin");
 const SSGPlugin = require("static-site-generator-webpack-plugin");
 const {getIfUtils, removeEmpty} = require("webpack-config-utils");
 const manifest = require("./src/manifest.json");
-const globals = require("./build/mock/globals");
 
 const ShortName = "QuicKey";
 const FullName = `${ShortName} – The quick tab switcher`;
@@ -136,10 +135,7 @@ module.exports = (env, argv) => {
 				new SSGPlugin({
 					entry: "../temp/ssg.js",
 					paths: ["../temp/popup.html"],
-						// pass the fs module to the render function, since it can't
-						// seem to import that module on its own
 					locals: { fs },
-					globals,
 				}),
 			],
 			output: {

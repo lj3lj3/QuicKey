@@ -256,8 +256,10 @@ export function connect(
 				// cause the background script to reload, which should then call
 				// ipc.connect() from there and trigger our onConnect() above.
 				// if the port name matches, then we'll set up the new channel
-				// and forward all the queued calls.
-			chrome.runtime.connect({ name: "__WAKEUP__" });
+				// and forward all the queued calls.  listen for onDisconnect
+				// to suppress "Receiving end does not exist" errors.
+			const wakeupPort = chrome.runtime.connect({ name: "__WAKEUP__" });
+			wakeupPort.onDisconnect.addListener(() => chrome.runtime.lastError);
 //console.error("---------- call QUEUE", name, callQueue.length);
 
 			return promise;

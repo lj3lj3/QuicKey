@@ -15,24 +15,9 @@ const ChangeWarning = ["\x1b[31m%s\x1b[0m", `
 const root = (contents) => `<div id="root">${contents}</div>`;
 const rootPattern = new RegExp(root("(.+)"));
 
+// SSG pre-rendering is no longer needed since the popup uses createRoot()
+// instead of hydrateRoot(). This script simply returns the original HTML.
 export default function render({ fs })
 {
-	const currentPopupHTML = fs.readFileSync("./src/popup.html", "utf8");
-	const match = currentPopupHTML.match(rootPattern);
-	const currentReactMarkup = match[1];
-	const newReactMarkup = ReactDOMServer.renderToString(React.createElement(App, {
-		initialQuery: "",
-		initialShortcuts: [],
-		platform: "win",
-		tracker: {
-			set: function() {}
-		},
-		port: {}
-	}));
-
-	if (currentReactMarkup !== newReactMarkup) {
-		console.log(...ChangeWarning);
-	}
-
-	return currentPopupHTML.replace(root(currentReactMarkup), root(newReactMarkup));
-};
+	return fs.readFileSync("./src/popup.html", "utf8");
+}

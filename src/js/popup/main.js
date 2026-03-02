@@ -1,6 +1,6 @@
 import "@/lib/error-handler";
 import React from "react";
-import { hydrateRoot } from "react-dom/client";
+import { createRoot } from "react-dom/client";
 import trackers from "@/background/page-trackers";
 import App from "./app";
 import "./monitor-color-scheme";
@@ -40,21 +40,25 @@ gOnKeyDown = null;
 gKeyCache = null;
 gShortcutCache = null;
 
+	// note: gPrefetchedData is cleaned up after renderApp() uses it
+
 
 function renderApp()
 {
-	hydrateRoot(
-		document.getElementById("root"),
-		React.createElement(App, {
+	createRoot(document.getElementById("root"))
+		.render(React.createElement(App, {
 			initialQuery,
 			initialShortcuts,
 			platform,
 			tracker,
 			isPopup: params.has("props"),
 			port: gPort,
+			prefetchedData: gPrefetchedData,
+			prefetchedFrecencyMap: gPrefetchedFrecencyMap,
 			...props,
-		})
-	);
+		}));
+	gPrefetchedData = null;
+	gPrefetchedFrecencyMap = null;
 }
 
 

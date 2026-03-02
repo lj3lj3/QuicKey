@@ -43,18 +43,35 @@ function addRecentBoost(
 }
 
 
-async function enrichWithFrecency(tabs) {
+async function enrichWithFrecency(tabs, prefetchedFrecencyMap) {
+		// if background already computed a frecencyMap, apply it directly
+		// without any chrome.history.search() IPC calls
+	if (prefetchedFrecencyMap) {
+		for (const tab of tabs) {
+			const boost = prefetchedFrecencyMap[tab.url];
+
+			if (boost) {
+				tab.recentBoost = (tab.recentBoost || 1) * boost;
+			}
+		}
+
+			// seed the local cache with prefetched data so subsequent
+			// calls (e.g. after tab activation) can reuse it
+		frecencyCache = { ...prefetchedFrecencyMap };
+		frecencyCacheTime = Date.now();
+
+		return tabs;
+	}
+
+		// fallback: query chrome.history for each uncached tab URL
 	const now = Date.now();
 
-	// invalidate cache if it's too old
 	if ((now - frecencyCacheTime) > FrecencyCacheMaxAge) {
 		frecencyCache = {};
 	}
 
-	// separate tabs into cached and uncached
 	const uncachedTabs = tabs.filter(tab => !(tab.url in frecencyCache));
 
-	// only query chrome.history for uncached URLs
 	if (uncachedTabs.length > 0) {
 		const historyQueries = uncachedTabs.map(tab =>
 			chrome.history.search({ text: tab.url, maxResults: 1, startTime: 0 })
@@ -76,7 +93,6 @@ async function enrichWithFrecency(tabs) {
 		frecencyCacheTime = now;
 	}
 
-	// apply cached frecency boosts to all tabs
 	for (const tab of tabs) {
 		const frecencyFactor = frecencyCache[tab.url];
 
@@ -89,12 +105,13 @@ async function enrichWithFrecency(tabs) {
 }
 
 
+export { enrichWithFrecency };
+
 export default async function initTabs(
 	tabsPromise,
 	activeTab,
 	markTabsInOtherWindows,
-	usePinyin,
-	enableEnhancedSearch)
+	usePinyin)
 {
 	let tabsByTitle = {};
 
@@ -177,11 +194,5 @@ export default async function initTabs(
 
 		return tabs;
 	})
-	.then(tabs => {
-		if (enableEnhancedSearch) {
-			return enrichWithFrecency(tabs);
-		}
-
-		return tabs;
-	});
+;
 }
