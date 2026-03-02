@@ -8,6 +8,11 @@ import * as k from "@/background/constants";
 import EnhancedSearchSection from "./enhanced-search-section";
 
 
+const MinHistoryItems = 100;
+const MaxHistoryItems = 100000;
+const PerformanceWarningThreshold = 10000;
+
+
 export default function HistorySection()
 {
 	const {
@@ -20,6 +25,8 @@ export default function HistorySection()
 	const [importResult, setImportResult] = useState(null);
 	const [clearing, setClearing] = useState(false);
 	const fileInputRef = useRef(null);
+	const maxHistoryItems = settings[k.MaxHistoryItems.Key] || 10000;
+	const maxMixedHistoryItems = settings[k.MaxMixedHistoryItems.Key] || 2000;
 
 
 	function refreshStats()
@@ -38,6 +45,36 @@ export default function HistorySection()
 		if (value) {
 			setTimeout(refreshStats, 1000);
 		}
+	}
+
+
+	function handleMaxItemsChange(
+		event)
+	{
+		const raw = event.target.value.replace(/[^\d]/g, "");
+		let value = parseInt(raw, 10);
+
+		if (isNaN(value)) {
+			value = MinHistoryItems;
+		}
+
+		value = Math.max(MinHistoryItems, Math.min(MaxHistoryItems, value));
+		onChange(value, k.MaxHistoryItems.Key);
+	}
+
+
+	function handleMaxMixedItemsChange(
+		event)
+	{
+		const raw = event.target.value.replace(/[^\d]/g, "");
+		let value = parseInt(raw, 10);
+
+		if (isNaN(value)) {
+			value = MinHistoryItems;
+		}
+
+		value = Math.max(MinHistoryItems, Math.min(MaxHistoryItems, value));
+		onChange(value, k.MaxMixedHistoryItems.Key);
 	}
 
 
@@ -126,11 +163,10 @@ export default function HistorySection()
 					value={settings[k.EnableUnlimitedHistory.Key]}
 					onChange={handleToggleChange}
 				>
-					<div className="subtitle">
-						When enabled, QuicKey stores your browsing history locally for
-						searching beyond Chrome's ~90 day limit. History items
-						searched: up to 10,000.
-					</div>
+				<div className="subtitle">
+					When enabled, QuicKey stores your browsing history locally for
+					searching beyond Chrome's ~90 day limit.
+				</div>
 				</Checkbox>
 			</NewSetting>
 
@@ -143,6 +179,38 @@ export default function HistorySection()
 						onClick={refreshStats}
 						title="Refresh count"
 					>↻</button>
+				</div>
+
+				<div className="history-max-items">
+					<span className="label"><code>/h</code> mode — history items searched: up to </span>
+					<input
+						type="number"
+						className="max-items-input"
+						min={MinHistoryItems}
+						max={MaxHistoryItems}
+						step={1000}
+						value={maxHistoryItems}
+						onChange={handleMaxItemsChange}
+					/>
+					{maxHistoryItems > PerformanceWarningThreshold && <div className="performance-warning">
+						⚠️ Higher values may cause noticeable delay when typing search queries.
+					</div>}
+				</div>
+
+				<div className="history-max-items">
+					<span className="label">Mixed mode — history items searched: up to </span>
+					<input
+						type="number"
+						className="max-items-input"
+						min={MinHistoryItems}
+						max={MaxHistoryItems}
+						step={1000}
+						value={maxMixedHistoryItems}
+						onChange={handleMaxMixedItemsChange}
+					/>
+					{maxMixedHistoryItems > PerformanceWarningThreshold && <div className="performance-warning">
+						⚠️ Higher values may cause noticeable delay when typing search queries.
+					</div>}
 				</div>
 
 				<div className="history-import">

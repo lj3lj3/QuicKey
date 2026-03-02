@@ -114,6 +114,8 @@ const Updaters = {
 	15: update(addDefaultSetting(k.EnableEnhancedSearch)),
 	16: update(addDefaultSetting(k.DefaultSearchScope)),
 	17: update(addDefaultSetting(k.GroupTitleHighPriority)),
+	18: update(addDefaultSetting(k.MaxHistoryItems)),
+	19: update(addDefaultSetting(k.MaxMixedHistoryItems)),
 };
 	// calculate the version by incrementing the highest key in the
 	// Updaters hash, so that the version is automatically increased

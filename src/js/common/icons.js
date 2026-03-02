@@ -53,6 +53,13 @@ export const SearchIcon = () => (
 );
 
 
+export const LoadingIcon = () => (
+<svg className="loading icon" viewBox="0 0 50 50">
+	<circle cx="25" cy="25" r="20" fill="none" stroke="currentColor" strokeWidth="4" strokeDasharray="80 50" strokeLinecap="round" />
+</svg>
+);
+
+
 export const ClearIcon = () => (
 <svg className="clear icon" viewBox="0 0 640 1024">
 	<path d="M640 320L512 192 320 384 128 192 0 320l192 192L0 704l128 128 192-192 192 192 128-128L448 512 640 320z" />

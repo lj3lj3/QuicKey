@@ -5,7 +5,7 @@ import ResultsListItem from "./results-list-item";
 import MessageItem from "./message-item";
 import OptionsButton from "./options-button";
 import { connectPopupWindow } from "./popup-window";
-import scoreItems, { setGroupTitlePriority } from "./score/score-items";
+import scoreItems, { setGroupTitlePriority, scoreItemsAsync } from "./score/score-items";
 import initTabs from "./data/init-tabs";
 import getBookmarks from "./data/get-bookmarks";
 import getHistory from "./data/get-history";
@@ -29,6 +29,7 @@ const NearlyZeroScore = .02;
 const MaxItems = 10;
 const MinItems = 4;
 const MinScoreDiff = .1;
+const DefaultMaxHistoryItems = 10000;
 const BookmarksQuery = "/b ";
 const HistoryQuery = "/h ";
 const TabsOnlyQuery = "/t ";
@@ -124,6 +125,7 @@ export default class App extends React.Component {
 	popupH = 0;
 	nextFrameRequestID = 0;
 	port = null;
+	debouncedSetQuery = null;
 
 
 	isEnhancedSearchEnabled()
@@ -191,7 +193,8 @@ export default class App extends React.Component {
 				// default to the first item being selected if we got an
 				// initial query or if the popup was opened in nav mode
 			selected: (query || !this.openedForSearch || this.navigatingRecents) ? 0 : -1,
-			newSettingsAvailable: false
+			newSettingsAvailable: false,
+			searching: false
 		};
 	}
 
@@ -438,6 +441,8 @@ export default class App extends React.Component {
 		const showBookmarkPaths = this.settings[k.ShowBookmarkPaths.Key];
 		const usePinyin = this.settings[k.UsePinyin.Key];
 		const enableUnlimitedHistory = this.settings[k.EnableUnlimitedHistory.Key];
+		const maxHistoryItems = this.settings[k.MaxHistoryItems.Key];
+		const maxMixedHistoryItems = this.settings[k.MaxMixedHistoryItems.Key];
 		const searchBoxTextLC = searchBoxText.toLowerCase();
 		let query = searchBoxText;
 
@@ -459,7 +464,7 @@ export default class App extends React.Component {
 
 			if (!this.history.length) {
 				this.loadPromisedItems(
-					() => getHistory(usePinyin, enableUnlimitedHistory, this.isEnhancedSearchEnabled()),
+				() => getHistory(usePinyin, enableUnlimitedHistory, this.isEnhancedSearchEnabled(), maxHistoryItems),
 					"history"
 				);
 			}
@@ -482,7 +487,7 @@ export default class App extends React.Component {
 
 			if (scope.includes("history") && !this.history.length) {
 				this.loadPromisedItems(
-					() => getHistory(usePinyin, enableUnlimitedHistory, this.isEnhancedSearchEnabled()),
+					() => getHistory(usePinyin, enableUnlimitedHistory, this.isEnhancedSearchEnabled(), maxMixedHistoryItems),
 					"history"
 				);
 			}
@@ -496,7 +501,34 @@ export default class App extends React.Component {
 		}
 
 		this.setState({ searchBoxText });
-		this.setQuery(query);
+
+		const effectiveMaxItems = this.mode === "history"
+			? maxHistoryItems
+			: maxMixedHistoryItems;
+		const needsDebounce = effectiveMaxItems > 10000
+			&& (this.mode === "history"
+				|| (this.mode === "tabs"
+					&& (this.settings[k.DefaultSearchScope.Key] || "").includes("history")));
+
+		if (needsDebounce && query) {
+			this.setState({ searching: true, query });
+			this.asyncSearchId = (this.asyncSearchId || 0) + 1;
+
+			if (!this.debouncedSetQuery) {
+				this.debouncedSetQuery = debounce((q) => {
+					this.setQueryAsync(q);
+				}, 300, this);
+			}
+
+			this.debouncedSetQuery(query);
+		} else {
+			if (this.debouncedSetQuery) {
+				this.debouncedSetQuery.cancel();
+			}
+
+			this.setState({ searching: false });
+			this.setQuery(query);
+		}
 	};
 
 
@@ -509,6 +541,28 @@ export default class App extends React.Component {
 			selected: (query || (this.props.isPopup && (!this.openedForSearch || this.navigatingRecents)))
 				? 0
 				: -1
+		});
+	}
+
+
+	async setQueryAsync(
+		query)
+	{
+		const searchId = this.asyncSearchId;
+		const matchingItems = await this.getMatchingItemsAsync(query);
+
+			// discard results if a newer search has been initiated
+		if (searchId !== this.asyncSearchId) {
+			return;
+		}
+
+		this.setState({
+			query,
+			matchingItems,
+			selected: (query || (this.props.isPopup && (!this.openedForSearch || this.navigatingRecents)))
+				? 0
+				: -1,
+			searching: false
 		});
 	}
 
@@ -665,6 +719,66 @@ export default class App extends React.Component {
 			// drop barely-matching results, keeping a minimum of 3,
 			// unless there's a big difference in scores between the
 			// first two items, which may mean we need a longer tail
+		const matchingItems = _.dropRightWhile(items, ({score}, i) =>
+			score < nearlyZeroScore ||
+				(score < minScore && (i + 1 > MinItems || firstScoresDiff > minScoreDiff))
+		);
+
+		return matchingItems;
+	}
+
+
+	async getMatchingItemsAsync(
+		query)
+	{
+		const tokens = query.trim().split(SpacePattern);
+		const scope = this.settings[k.DefaultSearchScope.Key] || k.DefaultSearchScope.Tabs;
+		const dataSource = (this.mode === "tabs" && scope !== k.DefaultSearchScope.Tabs)
+			? this.getMergedItems()
+			: this[this.mode];
+		const items = await scoreItemsAsync(dataSource, tokens, this.settings[k.UsePinyin.Key]);
+
+		if (!query) {
+			switch (this.mode) {
+				case "tabs":
+					return this.recents;
+
+				case "openTabs":
+					return this.openTabs;
+
+				case "history":
+					return this.history.sort(sortHistoryItems);
+
+				default:
+					return items;
+			}
+		}
+
+		if (this.isEnhancedSearchEnabled()
+				&& query
+				&& (this.mode === "tabs" || this.mode === "openTabs"
+					|| this.mode === "history"
+					|| this.mode === "bookmarks")) {
+			const boosts = adaptiveHistory.getBoosts(query, this.mode);
+
+			if (Object.keys(boosts).length > 0) {
+				for (const item of items) {
+					const boost = boosts[item.url];
+
+					if (boost) {
+						item.score *= boost;
+					}
+				}
+				items.sort((a, b) => b.score - a.score);
+			}
+		}
+
+		const minScore = MinScore * tokens.length;
+		const minScoreDiff = MinScoreDiff * tokens.length;
+		const nearlyZeroScore = NearlyZeroScore * tokens.length;
+		const firstScoresDiff = (items.length > 1 && items[0].score > minScore)
+			? items[0].score - items[1].score
+			: 0;
 		const matchingItems = _.dropRightWhile(items, ({score}, i) =>
 			score < nearlyZeroScore ||
 				(score < minScore && (i + 1 > MinItems || firstScoresDiff > minScoreDiff))
@@ -1170,6 +1284,11 @@ export default class App extends React.Component {
 			this.historyPromise = null;
 			this.openTabs = [];
 
+			if (this.debouncedSetQuery) {
+				this.debouncedSetQuery.cancel();
+				this.debouncedSetQuery = null;
+			}
+
 				// if we're being closed by esc, not by losing focus or by
 				// focusing another tab, then in addition to moving off
 				// screen, force the popup to lose focus so some other
@@ -1455,7 +1574,8 @@ export default class App extends React.Component {
 			searchBoxText,
 			matchingItems,
 			selected,
-			newSettingsAvailable
+			newSettingsAvailable,
+			searching
 		} = this.state;
 
 		return <div className={this.className}>
@@ -1466,6 +1586,7 @@ export default class App extends React.Component {
 				forceUpdate={this.forceUpdate}
 				selectAll={this.selectAllSearchBoxText}
 				query={searchBoxText}
+				searching={searching}
 				onChange={this.onQueryChange}
 				onKeyDown={this.onKeyDown}
 				onKeyUp={this.onKeyUp}

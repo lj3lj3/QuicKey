@@ -75,3 +75,23 @@ export default function scoreItems(
 		return SimpleScoreArray(items, tokens);
 	}
 }
+
+
+export async function scoreItemsAsync(
+	items,
+	tokens,
+	usePinyin)
+{
+	const queryLength = totalLength(tokens);
+	const averageLength = queryLength / tokens.length;
+
+	if (queryLength <= MaxQueryLength && averageLength <= MaxAverageLength) {
+		if (usePinyin) {
+			return PinyinQuickScoreArray.async(items, tokens);
+		} else {
+			return QuickScoreArray.async(items, tokens);
+		}
+	} else {
+		return SimpleScoreArray.async(items, tokens);
+	}
+}

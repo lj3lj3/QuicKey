@@ -119,61 +119,135 @@ export default function(
 	}
 
 
-	return function scoreArray(
+	function scoreMultipleTokens(
+		items,
+		tokens,
+		startIndex,
+		endIndex)
+	{
+		for (let idx = startIndex; idx < endIndex; idx++) {
+			const item = items[idx];
+			const tokenScores = new Array(tokens.length).fill(0);
+
+			for (const { key, score, weight } of keys) {
+				const hitMask = [];
+				let string = item[key];
+				let keyScore = 0;
+				const keyWeight = weight || 1;
+
+					// empty strings will get a score of 0
+				if (string) {
+					for (let i = 0, len = tokens.length; i < len; i++) {
+						const token = tokens[i];
+						const tokenMatches = [];
+						const tokenScore = score(string, token, tokenMatches) * keyWeight;
+
+						if (tokenScore) {
+							string = replaceMatches(string, tokenMatches);
+							hitMask.push(...tokenMatches);
+							keyScore += tokenScore;
+							tokenScores[i] = Math.max(tokenScore, tokenScores[i]);
+						}
+					}
+
+					if (keyScore) {
+						hitMask.sort(numerically);
+					}
+				}
+
+				item.scores[key] = keyScore;
+				item.hitMasks[key] = hitMask;
+			}
+
+				// set the score to 0 if every token doesn't match at least
+				// one of the keys
+			item.score = sumScores(tokenScores) * (item.recentBoost ?? 1);
+		}
+	}
+
+
+	function scoreArraySync(
 		items,
 		tokens)
 	{
 		initItems(items);
 
-			// if the query is empty, the only thing we'll do is sort the items
-			// array below, so it's alphabetized
 		if (tokens.length === 1) {
-				// use a simpler loop when there's just one token
 			scoreSingleToken(items, tokens[0]);
 		} else if (tokens.length > 1) {
-			for (const item of items) {
-					// init the map with 0 for each key, so we don't have to
-					// handle missing keys in Math.max() below
-				const tokenScores = new Array(tokens.length).fill(0);
-
-				for (const { key, score, weight } of keys) {
-					const hitMask = [];
-					let string = item[key];
-					let keyScore = 0;
-					const keyWeight = weight || 1;
-
-						// empty strings will get a score of 0
-					if (string) {
-						for (let i = 0, len = tokens.length; i < len; i++) {
-							const token = tokens[i];
-							const tokenMatches = [];
-							const tokenScore = score(string, token, tokenMatches) * keyWeight;
-
-							if (tokenScore) {
-								string = replaceMatches(string, tokenMatches);
-								hitMask.push(...tokenMatches);
-								keyScore += tokenScore;
-								tokenScores[i] = Math.max(tokenScore, tokenScores[i]);
-							}
-						}
-
-						if (keyScore) {
-							hitMask.sort(numerically);
-						}
-					}
-
-					item.scores[key] = keyScore;
-					item.hitMasks[key] = hitMask;
-				}
-
-					// set the score to 0 if every token doesn't match at least
-					// one of the keys
-				item.score = sumScores(tokenScores) * (item.recentBoost ?? 1);
-			}
+			scoreMultipleTokens(items, tokens, 0, items.length);
 		}
 
 		items.sort(compareScoredStrings);
 
 		return items;
 	}
+
+
+	scoreArraySync.async = async function scoreArrayAsync(
+		items,
+		tokens,
+		chunkSize = 2000)
+	{
+		initItems(items);
+
+		if (tokens.length === 1) {
+				// single token scoring is relatively fast, process in chunks
+			const query = tokens[0];
+
+			for (let i = 0; i < items.length; i += chunkSize) {
+				const end = Math.min(i + chunkSize, items.length);
+
+				for (let j = i; j < end; j++) {
+					const item = items[j];
+
+					item.score = keys.reduce((currentScore, {key, score, weight}) => {
+						const hitMask = [];
+						const string = item[key];
+						const newScore = string
+							? score(string, query, hitMask) * (weight || 1) * (item.recentBoost || 1)
+							: 0;
+
+						item.scores[key] = newScore;
+						item.hitMasks[key] = hitMask;
+
+						return Math.max(currentScore, newScore);
+					}, 0);
+				}
+
+				if (end < items.length) {
+					await yieldToMain();
+				}
+			}
+		} else if (tokens.length > 1) {
+			for (let i = 0; i < items.length; i += chunkSize) {
+				const end = Math.min(i + chunkSize, items.length);
+
+				scoreMultipleTokens(items, tokens, i, end);
+
+				if (end < items.length) {
+					await yieldToMain();
+				}
+			}
+		}
+
+		items.sort(compareScoredStrings);
+
+		return items;
+	};
+
+
+	return scoreArraySync;
+}
+
+
+function yieldToMain()
+{
+	return new Promise(resolve => {
+		if (typeof requestAnimationFrame === "function") {
+			requestAnimationFrame(() => setTimeout(resolve, 0));
+		} else {
+			setTimeout(resolve, 0);
+		}
+	});
 }

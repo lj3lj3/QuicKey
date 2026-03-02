@@ -94,6 +94,12 @@ export const NavigateRecentsWithPopup = {
 export const EnableUnlimitedHistory = {
 	Key: "enableUnlimitedHistory"
 };
+export const MaxHistoryItems = {
+	Key: "maxHistoryItems"
+};
+export const MaxMixedHistoryItems = {
+	Key: "maxMixedHistoryItems"
+};
 export const Shortcuts = {
 	Key: "shortcuts",
 	MRUSelect: "mruSelect",

@@ -33,6 +33,8 @@ const DefaultSettings = {
 	[k.CurrentWindowLimitSearch.Key]: false,
 	[k.NavigateRecentsWithPopup.Key]: true,
 	[k.EnableUnlimitedHistory.Key]: false,
+	[k.MaxHistoryItems.Key]: 10000,
+	[k.MaxMixedHistoryItems.Key]: 2000,
 	[k.EnableEnhancedSearch.Key]: false,
 	[k.GroupTitleHighPriority.Key]: false,
 	[k.DefaultSearchScope.Key]: k.DefaultSearchScope.Tabs,

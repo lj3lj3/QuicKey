@@ -6,7 +6,7 @@ import {calculateFrecencyBoost} from "../score/frecency";
 
 
 const RequestedItemCount = 2000;
-const UnlimitedRequestedItemCount = 1000;
+const DefaultMaxHistoryItems = 10000;
 const LoopItemCount = 1000;
 const FilenamePattern = /([^/]*)\/([^/]+)?$/;
 
@@ -37,9 +37,10 @@ function processItem(
 
 
 function getHistoryFromDB(
-	usePinyin)
+	usePinyin,
+	maxHistoryItems)
 {
-	return historyDB.search(UnlimitedRequestedItemCount)
+	return historyDB.search(maxHistoryItems || DefaultMaxHistoryItems)
 		.then(items => {
 			const urls = {};
 
@@ -127,10 +128,11 @@ function getHistoryFromChromeAPI(
 export default function getHistory(
 	usePinyin,
 	useUnlimitedHistory,
-	enableEnhancedSearch)
+	enableEnhancedSearch,
+	maxHistoryItems)
 {
 	const promise = useUnlimitedHistory
-		? getHistoryFromDB(usePinyin)
+		? getHistoryFromDB(usePinyin, maxHistoryItems)
 		: getHistoryFromChromeAPI(usePinyin);
 
 	return promise.then(items => {

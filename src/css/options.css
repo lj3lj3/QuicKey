@@ -934,6 +934,44 @@ label b, .label b {
 	min-width: auto;
 }
 
+.history-max-items {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: .5em;
+	margin-bottom: .5em;
+}
+
+.history-max-items .label {
+	font-weight: 500;
+}
+
+.history-max-items .max-items-input {
+	width: 6em;
+	padding: .2em .4em;
+	font-size: .95em;
+	border: 1px solid #ccc;
+	border-radius: 4px;
+	text-align: right;
+}
+
+.history-max-items .max-items-input:focus {
+	border-color: #4285f4;
+	outline: none;
+	box-shadow: 0 0 0 2px rgba(66, 133, 244, 0.2);
+}
+
+.performance-warning {
+	width: 100%;
+	margin-top: .25em;
+	padding: .4em .6em;
+	background: #fff8e1;
+	color: #f57f17;
+	border-radius: 4px;
+	font-size: .82em;
+	line-height: 1.4;
+}
+
 .import-result {
 	margin-top: .5em;
 	padding: .5em .75em;

@@ -1,5 +1,5 @@
 import Input from "./input";
-import {SearchIcon} from "@/common/icons";
+import {SearchIcon, LoadingIcon} from "@/common/icons";
 import handleRef from "@/lib/handle-ref";
 import React from "react";
 import {IsFirefox} from "@/background/constants";
@@ -66,6 +66,7 @@ export default class SearchBox extends React.Component {
 			mode,
 			forceUpdate,
 			selectAll,
+			searching,
 			onChange,
 			onKeyDown,
 			onKeyUp
@@ -92,7 +93,7 @@ export default class SearchBox extends React.Component {
 				onKeyDown={onKeyDown}
 				onKeyUp={onKeyUp}
 			/>
-			<SearchIcon />
+			{searching ? <LoadingIcon /> : <SearchIcon />}
 			{mode == "bookmarks" && query.length == 3 &&
 				<Placeholder mode={mode} shortcut="/b" text="Search for a bookmark title or URL" />}
 			{mode == "history" && query.length == 3 &&
