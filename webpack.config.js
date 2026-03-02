@@ -50,7 +50,7 @@ module.exports = (env, argv) => {
 	const output = {
 		filename: "js/[name].js",
 		path: outputPath,
-		clean: true,
+		clean: ifProduction(true, false),
 	};
 	const buildTime = new Date().toISOString();
 

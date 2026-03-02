@@ -706,6 +706,10 @@ chrome.runtime.getContexts({ contextTypes: [chrome.runtime.ContextType.TAB] })
 	});
 
 storage.set(data => {
+	if (!data) {
+		return;
+	}
+
 		// save the lastUsedVersion in a global before we return the current
 		// version below, so the onInstalled promise handler knows whether
 		// to open the options page.  of course, to do that, we need to make

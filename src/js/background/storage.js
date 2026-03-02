@@ -138,7 +138,15 @@ DEBUG && console.error(`Storage error: ${failure}`, storage);
 		saveResult)
 	{
 		return navigator.locks.request(lockName, async () => {
-			const { data } = await chrome.storage.local.get(null);
+			let { data } = await chrome.storage.local.get(null);
+
+			if (!data) {
+					// data may be undefined if resetWithoutLocking() has
+					// removed the storage keys but hasn't yet saved the
+					// default data back.  fall back to the in-memory copy.
+				data = await dataPromise;
+			}
+
 			let result;
 
 			try {
