@@ -643,7 +643,9 @@ export default class App extends React.Component {
 				this.debouncedSetQuery.cancel();
 			}
 
-			this.setState({ searching: false });
+			// keep loading indicator visible while store data is still loading
+			const storeStillLoading = this.activeStore.promise && this.activeStore.length === 0;
+			this.setState({ searching: storeStillLoading });
 			this.setQuery(query);
 		}
 	};

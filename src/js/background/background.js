@@ -36,7 +36,7 @@ const MessageHandlers = {
 		if (stopNavigatingRecents) {
 				// change the flag before focusing the tab, so that its
 				// activation event will get tracked
-			navigatingRecents = false;
+			setNavigatingRecents(false);
 		}
 
 			// bring the tab's window forward *before* focusing the tab, since
@@ -69,8 +69,12 @@ let navigateRecentsWithPopup = false;
 let enableUnlimitedHistory = false;
 let enableEnhancedSearch = false;
 let navigatingRecents = false;
+let navigatingRecentsTimer = null;
+const NavigatingRecentsTimeout = 10000;
 let activeTab;
 let lastWindowID;
+let lastActivatedTabId = null;
+let lastActivatedTime = 0;
 let lastUsedVersion;
 let usePinyin;
 let cachedTabs = null;
@@ -184,6 +188,8 @@ function handleTabActivated({
 		// by a window in another profile, in which case we can't access any
 		// info about the tabs there.
 	if (Number.isInteger(tabId) && tabId !== popupWindow.tabID && !navigatingRecents) {
+		lastActivatedTabId = tabId;
+		lastActivatedTime = Date.now();
 		addTab(tabId);
 
 		if (ports.popup) {
@@ -344,7 +350,7 @@ async function navigateRecents(
 				// direction if the window isn't currently visible, since that
 				// would just mean navigating to the currently active tab
 			if (direction == -1 || popupWindow.isVisible) {
-				navigatingRecents = true;
+				setNavigatingRecents(true);
 
 					// execute any pending tab activation event so the recents
 					// list is up-to-date before we start navigating.  we have to
@@ -404,7 +410,7 @@ function toggleRecentTabs(
 				sendPopupMessage("stopNavigatingRecents");
 			}
 
-			navigatingRecents = false;
+			setNavigatingRecents(false);
 
 				// in case the user was navigating recents during a cooldown and
 				// then hit the toggle command, reset the icon back to normal
@@ -458,10 +464,30 @@ function disableCommands()
 }
 
 
+function setNavigatingRecents(value) {
+	navigatingRecents = value;
+
+	if (value) {
+			// set a safety timeout to ensure navigatingRecents doesn't get
+			// stuck permanently if the popup fails to close or send a
+			// stopNavigatingRecents message
+		clearTimeout(navigatingRecentsTimer);
+		navigatingRecentsTimer = setTimeout(() => {
+DEBUG && console.warn("navigatingRecents safety timeout fired");
+			navigatingRecents = false;
+			navigatingRecentsTimer = null;
+		}, NavigatingRecentsTimeout);
+	} else {
+		clearTimeout(navigatingRecentsTimer);
+		navigatingRecentsTimer = null;
+	}
+}
+
+
 	// update this flag in case the popup gets hidden or closed while the user
 	// is navigating recents by some mechanism other than releasing the modifier
 	// to select the currently focused tab
-popupWindow.on(["hide", "close"], () => navigatingRecents = false);
+popupWindow.on(["hide", "close"], () => setNavigatingRecents(false));
 
 	// refresh tab cache and prefetch storage data before popup opens
 	// so data is ready to push as soon as popup connects
@@ -576,10 +602,20 @@ chrome.windows.onFocusChanged.addListener(windowID => {
 				// different profile, so this instance of QuicKey can't access
 				// any info about it.  we'll just pass undefined to addTab(),
 				// which will ignore it.
-			.then(([tab = {}]) => handleTabActivated({
-				tabId: tab.id,
-				windowId: windowID
-			}));
+			.then(([tab = {}]) => {
+					// skip if onActivated already handled this tab recently,
+					// to avoid the debounced addTab from being overwritten by
+					// a duplicate call from onFocusChanged
+				if (tab.id === lastActivatedTabId &&
+						(Date.now() - lastActivatedTime) < k.MinTabDwellTime) {
+					return;
+				}
+
+				handleTabActivated({
+					tabId: tab.id,
+					windowId: windowID
+				});
+			});
 	}
 });
 
@@ -662,6 +698,10 @@ chrome.runtime.onConnect.addListener(port => {
 	port.onDisconnect.addListener(port => {
 		ports[port.name] = null;
 		activeTab = null;
+
+			// ensure navigatingRecents is reset when the popup disconnects,
+			// in case the popup closed without sending stopNavigatingRecents
+		setNavigatingRecents(false);
 //console.log("---- background: onDisconnect", port.name);
 
 		if (port.name == "popup") {
@@ -702,7 +742,7 @@ chrome.runtime.onMessage.addListener(({message, ...payload}, sender, sendRespons
 	} else if (message === "executeAddTab") {
 		addTab.execute();
 	} else if (message === "stopNavigatingRecents") {
-		navigatingRecents = false;
+		setNavigatingRecents(false);
 	} else if (message === "getActiveTab") {
 		sendResponse(activeTab);
 	} else if (message === "getCachedTabs") {
