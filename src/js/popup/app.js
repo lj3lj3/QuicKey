@@ -34,7 +34,22 @@ const DefaultMaxHistoryItems = 10000;
 const BookmarksQuery = "/b ";
 const HistoryQuery = "/h ";
 const TabsOnlyQuery = "/t ";
-const CommandQueryPattern = /^\/[bht]?$/i;
+const CommandQueryPattern = /^\/[bht]$/i;
+const CommandExactPattern = /^\/([bht])$/i;
+const ModeCycle = ["tabs", "history", "bookmarks", "openTabs"];
+const ModeLabels = {
+	tabs: { short: "M", text: "Mix" },
+	history: { short: "H", text: "History" },
+	bookmarks: { short: "B", text: "Bookmarks" },
+	openTabs: { short: "T", text: "Open Tabs" }
+};
+const ModePrefixMap = {
+	tabs: "",
+	history: HistoryQuery,
+	bookmarks: BookmarksQuery,
+	openTabs: TabsOnlyQuery,
+	command: ""
+};
 const NoRecentTabsMessage = [{
 	message: "Recently used tabs will appear here as you continue browsing",
 	faviconURL: "img/alert.svg",
@@ -102,6 +117,7 @@ function notEqual(
 export default class App extends React.Component {
 	visible = false;
 	mode = "tabs";
+	previousMode = "tabs";
 	activeStore = null;
 	forceUpdate = false;
 	selectAllSearchBoxText = false;
@@ -369,6 +385,7 @@ export default class App extends React.Component {
 				// to each one, and then update the results list with
 				// matches on the current query
 			store.items = scoreItems(items, []);
+			this.setState({ searching: false });
 			this.setQuery(this.state.query);
 
 			return items;
@@ -439,6 +456,7 @@ export default class App extends React.Component {
 		store.promise = loader().then(items => {
 			this.tabs = scoreItems(items, []);
 			store.items = this.tabs;
+			this.setState({ searching: false });
 			this.setQuery(this.state.query);
 
 			return items;
@@ -591,9 +609,18 @@ DEBUG && console.log("loadTabs recents (top 5):", this.recents.slice(0, 5).map(
 			if (!this.modeStores.openTabs.length) {
 				this.modeStores.openTabs.items = this.tabs.filter(tab => !tab.sessionId);
 			}
-		} else if (CommandQueryPattern.test(searchBoxText)) {
-				// we don't know if the user's going to type b or h, so
-				// don't match any items
+	} else if (searchBoxText === "/") {
+			// just a slash: user is starting to type a command,
+			// don't match any items
+			this.previousMode = this.mode !== "command" ? this.mode : this.previousMode;
+			this.mode = "command";
+			this.activeStore = this.modeStores.command;
+			query = "";
+	} else if (CommandExactPattern.test(searchBoxText)) {
+			// user has typed /b, /h, or /t — stay in command mode
+			// and show the placeholder prompt; the actual mode switch
+			// happens when they press Tab
+			this.previousMode = this.mode !== "command" ? this.mode : this.previousMode;
 			this.mode = "command";
 			this.activeStore = this.modeStores.command;
 			query = "";
@@ -705,6 +732,73 @@ DEBUG && console.log("loadTabs recents (top 5):", this.recents.slice(0, 5).map(
 				this.setState({ searching: false });
 			}
 		}
+	}
+
+
+	confirmCommandMode()
+	{
+		const {searchBoxText} = this.state;
+		const match = CommandExactPattern.exec(searchBoxText);
+
+		if (!match) {
+				// the user typed "/" without specifying a mode letter,
+				// restore the previous mode
+			this.forceUpdate = true;
+			this.setSearchBoxText(ModePrefixMap[this.previousMode] || "");
+
+			return;
+		}
+
+		const modeChar = match[1].toLowerCase();
+		const modeMap = { b: "bookmarks", h: "history", t: "openTabs" };
+		const targetMode = modeMap[modeChar];
+
+		if (targetMode) {
+			const prefix = ModePrefixMap[targetMode] || "";
+
+			this.forceUpdate = true;
+			this.setSearchBoxText(prefix);
+		}
+	}
+
+
+	cancelCommandMode()
+	{
+			// cancel command mode and restore the previous mode with
+			// an empty query, discarding the typed command text
+		const prefix = ModePrefixMap[this.previousMode] || "";
+
+		this.forceUpdate = true;
+		this.setSearchBoxText(prefix);
+	}
+
+
+	cycleSearchMode(
+		direction)
+	{
+		const currentIndex = ModeCycle.indexOf(this.mode);
+		const nextIndex = (currentIndex + direction + ModeCycle.length) % ModeCycle.length;
+		const nextMode = ModeCycle[nextIndex];
+
+		// synthesize the searchBoxText for the new mode with empty query
+		const prefix = ModePrefixMap[nextMode] || "";
+		const newSearchBoxText = prefix;
+
+		this.forceUpdate = true;
+		this.setSearchBoxText(newSearchBoxText);
+
+			// restore cursor to end of text after React re-render
+		requestAnimationFrame(() => {
+			if (this.searchBox && this.searchBox.searchBox) {
+				const input = this.searchBox.searchBox.input;
+
+				if (input) {
+					const len = input.value.length;
+
+					input.setSelectionRange(len, len);
+				}
+			}
+		});
 	}
 
 
@@ -1530,6 +1624,10 @@ DEBUG && console.log("loadTabs recents (top 5):", this.recents.slice(0, 5).map(
 				.then(() => {
 					this.setState({ sortingFrecency: false });
 					this.setQuery(this.state.query);
+				})
+				.catch((err) => {
+					console.error("[applyFrecencyAsync] enrichWithFrecency failed:", err);
+					this.setState({ sortingFrecency: false });
 				});
 		}
 	}
@@ -1800,9 +1898,13 @@ DEBUG && console.log("loadTabs recents (top 5):", this.recents.slice(0, 5).map(
 				autoFocus
 				ref={this.handleSearchBoxRef}
 				mode={this.mode}
+				previousMode={this.previousMode}
+				modeLabels={ModeLabels}
+				modePrefixMap={ModePrefixMap}
 				forceUpdate={this.forceUpdate}
 				selectAll={this.selectAllSearchBoxText}
 				query={searchBoxText}
+				pureQuery={query}
 				searching={searching || sortingFrecency}
 				onChange={this.onQueryChange}
 				onKeyDown={this.onKeyDown}

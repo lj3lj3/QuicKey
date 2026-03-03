@@ -28,16 +28,32 @@ const MenuBindings = [
 		}
 	}],
 	[["ctrl+Space", "ctrl+shift+Space"], event => self.modifySelected(event.shiftKey ? -1 : 1)],
+	[["Tab", "shift+Tab"], event => {
+		if (self.mode === "command") {
+				// in command mode, Tab confirms the mode switch based on
+				// the typed command (/b, /h, /t)
+			self.confirmCommandMode();
+		} else {
+			const direction = event.shiftKey ? -1 : 1;
+
+			self.cycleSearchMode(direction);
+		}
+	}],
 	[["Space", "shift+Space"], event => {
+		if (self.mode === "command") {
+				// in command mode, space confirms the mode switch,
+				// same as Tab key
+			self.confirmCommandMode();
+
+			return false;
+		}
+
 		const setting = self.settings[k.SpaceBehavior.Key];
-			// when the mode is command, `query` will be empty, even though `/b`
-			// has been typed in the search box.  if there's selected text in
-			// the search box, don't replace the text with a space and just move
-			// the selection instead.
+			// if there's selected text in the search box, don't replace
+			// the text with a space and just move the selection instead.
 		const allowSpace = !self.searchBox.getSelection()
 			&& (setting !== k.SpaceBehavior.Select)
-			&& (self.mode === "command"
-				|| (!event.shiftKey && !EmptyOrSpacePattern.test(self.state.query)));
+			&& (!event.shiftKey && !EmptyOrSpacePattern.test(self.state.query));
 		const currentSelection = self.state.selected;
 
 		if (setting !== k.SpaceBehavior.Space) {
