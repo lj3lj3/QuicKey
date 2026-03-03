@@ -315,21 +315,18 @@ maxResults = 1000)
 					const tx = database.transaction(STORE_NAME, "readonly");
 					const store = tx.objectStore(STORE_NAME);
 					const index = store.index("byTime");
-					const results = [];
-					const cursorRequest = index.openCursor(null, "prev");
 
-					cursorRequest.onsuccess = (event) => {
-						const cursor = event.target.result;
+					// use getAll() for batch reading instead of cursor traversal
+					// to avoid per-record I/O overhead from cursor.continue()
+					const request = index.getAll(null, maxResults);
 
-						if (cursor && results.length < maxResults) {
-							results.push(cursor.value);
-							cursor.continue();
-						} else {
-							resolve(results);
-						}
+					request.onsuccess = () => {
+						// getAll() returns results in ascending index order,
+						// reverse to get descending (most recent first)
+						resolve(request.result.reverse());
 					};
 
-					cursorRequest.onerror = () => reject(cursorRequest.error);
+					request.onerror = () => reject(request.error);
 				});
 			})
 		.catch(error => {

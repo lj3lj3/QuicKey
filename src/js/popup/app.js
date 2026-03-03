@@ -378,6 +378,56 @@ export default class App extends React.Component {
 	}
 
 
+	loadStoreItemsProgressive(
+		store,
+		loader,
+		expectedMaxItems = 0)
+	{
+		if (store.promise && store.maxItems === expectedMaxItems) {
+			return store.promise;
+		}
+
+		store.maxItems = expectedMaxItems;
+
+		const onQuickLoad = (quickItems) => {
+			// render the first batch immediately so the user sees results fast
+			store.items = scoreItems(quickItems, []);
+			this.refreshQuery();
+		};
+
+		store.promise = loader(onQuickLoad).then(items => {
+			store.items = scoreItems(items, []);
+			this.refreshQuery();
+
+			return items;
+		});
+
+		return store.promise;
+	}
+
+
+	refreshQuery()
+	{
+		const {query} = this.state;
+		console.log(`[refreshQuery] query="${query}", dataSize=${this.getActiveDataSize()}`);
+
+		if (query && this.getActiveDataSize() > 10000) {
+			// use async scoring for large datasets, and cancel any
+			// pending debounced search since we want to score immediately
+			if (this.debouncedSetQuery) {
+				this.debouncedSetQuery.cancel();
+			}
+
+			this.setState({ searching: true });
+			this.asyncSearchId = (this.asyncSearchId || 0) + 1;
+			this.setQueryAsync(query);
+		} else {
+			this.setState({ searching: false });
+			this.setQuery(query);
+		}
+	}
+
+
 	loadTabsStore(
 		loader)
 	{
@@ -525,10 +575,10 @@ export default class App extends React.Component {
 			this.activeStore = this.modeStores.history;
 			query = searchBoxText.slice(HistoryQuery.length);
 
-			// /h mode uses its own history store with maxHistoryItems
-			this.loadStoreItems(
+			// /h mode uses progressive loading for faster first render
+			this.loadStoreItemsProgressive(
 				this.modeStores.history,
-				() => getHistory(usePinyin, enableUnlimitedHistory, this.isEnhancedSearchEnabled(), maxHistoryItems),
+				(onQuickLoad) => getHistory(usePinyin, enableUnlimitedHistory, this.isEnhancedSearchEnabled(), maxHistoryItems, onQuickLoad),
 				maxHistoryItems
 			);
 		} else if (searchBoxTextLC.indexOf(TabsOnlyQuery) == 0) {
@@ -568,24 +618,27 @@ export default class App extends React.Component {
 			}
 		}
 
-		this.setState({ searchBoxText });
+		this.setState({ searchBoxText, sortingFrecency: this.mode === "tabs" && this.state.sortingFrecency });
 
 		const actualDataSize = this.getActiveDataSize();
 		const needsDebounce = actualDataSize > 10000
 			|| (this.mode === "history" && maxHistoryItems > 10000);
 
 		if (needsDebounce && query) {
+			console.log(`[setSearchBoxText] async path: query="${query}", actualDataSize=${actualDataSize}, asyncSearchId=${(this.asyncSearchId || 0) + 1}`);
 			this.setState({ searching: true, query });
 			this.asyncSearchId = (this.asyncSearchId || 0) + 1;
 
 			if (!this.debouncedSetQuery) {
 				this.debouncedSetQuery = debounce((q) => {
+					console.log(`[debouncedSetQuery] firing for query="${q}", asyncSearchId=${this.asyncSearchId}`);
 					this.setQueryAsync(q);
 				}, 300, this);
 			}
 
 			this.debouncedSetQuery(query);
 		} else {
+			console.log(`[setSearchBoxText] sync path: query="${query}", actualDataSize=${actualDataSize}`);
 			if (this.debouncedSetQuery) {
 				this.debouncedSetQuery.cancel();
 			}
@@ -612,22 +665,42 @@ export default class App extends React.Component {
 	async setQueryAsync(
 		query)
 	{
-		const searchId = this.asyncSearchId;
-		const matchingItems = await this.getMatchingItemsAsync(query);
-
-			// discard results if a newer search has been initiated
-		if (searchId !== this.asyncSearchId) {
-			return;
+		if (this.searchAbortController) {
+			console.log(`[setQueryAsync] aborting previous controller`);
+			this.searchAbortController.abort();
 		}
 
-		this.setState({
-			query,
-			matchingItems,
-			selected: (query || (this.props.isPopup && (!this.openedForSearch || this.navigatingRecents)))
-				? 0
-				: -1,
-			searching: false
-		});
+		const abortController = new AbortController();
+		this.searchAbortController = abortController;
+		const searchId = this.asyncSearchId;
+		console.log(`[setQueryAsync] start: query="${query}", searchId=${searchId}, dataSize=${this.getActiveDataSize()}`);
+
+		try {
+			const matchingItems = await this.getMatchingItemsAsync(query, abortController.signal);
+
+			console.log(`[setQueryAsync] scoring done: query="${query}", searchId=${searchId}, currentAsyncId=${this.asyncSearchId}, aborted=${abortController.signal.aborted}, matchingItems=${matchingItems.length}`);
+
+				// discard results if a newer search has been initiated
+			if (searchId !== this.asyncSearchId) {
+				console.log(`[setQueryAsync] DISCARDED: searchId=${searchId} !== asyncSearchId=${this.asyncSearchId}`);
+				return;
+			}
+
+			console.log(`[setQueryAsync] APPLYING results: query="${query}", items=${matchingItems.length}`);
+			this.setState({
+				query,
+				matchingItems,
+				selected: (query || (this.props.isPopup && (!this.openedForSearch || this.navigatingRecents)))
+					? 0
+					: -1,
+				searching: false
+			});
+		} catch (e) {
+			console.log(`[setQueryAsync] ERROR: query="${query}", searchId=${searchId}, error=`, e);
+			if (searchId === this.asyncSearchId) {
+				this.setState({ searching: false });
+			}
+		}
 	}
 
 
@@ -814,14 +887,15 @@ export default class App extends React.Component {
 
 
 	async getMatchingItemsAsync(
-		query)
+		query,
+		signal)
 	{
 		const tokens = query.trim().split(SpacePattern);
 		const scope = this.settings[k.DefaultSearchScope.Key] || k.DefaultSearchScope.Tabs;
 		const dataSource = (this.mode === "tabs" && scope !== k.DefaultSearchScope.Tabs)
 			? this.getMergedItems()
 			: this.activeStore.items;
-		const items = await scoreItemsAsync(dataSource, tokens, this.settings[k.UsePinyin.Key]);
+		const items = await scoreItemsAsync(dataSource, tokens, this.settings[k.UsePinyin.Key], signal);
 
 		if (!query) {
 			switch (this.mode) {

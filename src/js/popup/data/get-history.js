@@ -7,6 +7,7 @@ import {calculateFrecencyBoost} from "../score/frecency";
 
 const RequestedItemCount = 2000;
 const DefaultMaxHistoryItems = 10000;
+const QuickLoadCount = 500;
 const LoopItemCount = 1000;
 const FilenamePattern = /([^/]*)\/([^/]+)?$/;
 
@@ -36,22 +37,45 @@ function processItem(
 }
 
 
+function processAndDedup(
+	items,
+	usePinyin,
+	urls = {})
+{
+	items.forEach(item => {
+		const {url} = item;
+
+		if (!(url in urls)) {
+			processItem(item, usePinyin);
+			urls[url] = item;
+		}
+	});
+
+	return urls;
+}
+
+
 function getHistoryFromDB(
 	usePinyin,
-	maxHistoryItems)
+	maxHistoryItems,
+	onQuickLoad)
 {
-	return historyDB.search(maxHistoryItems || DefaultMaxHistoryItems)
+	const maxItems = maxHistoryItems || DefaultMaxHistoryItems;
+
+	return historyDB.search(maxItems)
 		.then(items => {
 			const urls = {};
 
-			items.forEach(item => {
-				const {url} = item;
+			if (onQuickLoad && items.length > QuickLoadCount) {
+				// progressive loading: process and return the first batch
+				// immediately so the UI can display results quickly
+				const quickItems = items.slice(0, QuickLoadCount);
+				processAndDedup(quickItems, usePinyin, urls);
+				onQuickLoad(Object.values(urls));
+			}
 
-				if (!(url in urls)) {
-					processItem(item, usePinyin);
-					urls[url] = item;
-				}
-			});
+			// process remaining items
+			processAndDedup(items, usePinyin, urls);
 
 			return Object.values(urls);
 		});
@@ -129,13 +153,10 @@ export default function getHistory(
 	usePinyin,
 	useUnlimitedHistory,
 	enableEnhancedSearch,
-	maxHistoryItems)
+	maxHistoryItems,
+	onQuickLoad)
 {
-	const promise = useUnlimitedHistory
-		? getHistoryFromDB(usePinyin, maxHistoryItems)
-		: getHistoryFromChromeAPI(usePinyin);
-
-	return promise.then(items => {
+	const applyFrecency = (items) => {
 		if (enableEnhancedSearch) {
 			items.forEach(item => {
 				if (item.visitCount && item.lastVisitTime) {
@@ -145,5 +166,15 @@ export default function getHistory(
 		}
 
 		return items;
-	});
+	};
+
+	const quickLoadWithFrecency = onQuickLoad
+		? (items) => onQuickLoad(applyFrecency(items))
+		: null;
+
+	const promise = useUnlimitedHistory
+		? getHistoryFromDB(usePinyin, maxHistoryItems, quickLoadWithFrecency)
+		: getHistoryFromChromeAPI(usePinyin);
+
+	return promise.then(applyFrecency);
 }

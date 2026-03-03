@@ -80,18 +80,19 @@ export default function scoreItems(
 export async function scoreItemsAsync(
 	items,
 	tokens,
-	usePinyin)
+	usePinyin,
+	signal)
 {
 	const queryLength = totalLength(tokens);
 	const averageLength = queryLength / tokens.length;
 
 	if (queryLength <= MaxQueryLength && averageLength <= MaxAverageLength) {
 		if (usePinyin) {
-			return PinyinQuickScoreArray.async(items, tokens);
+			return PinyinQuickScoreArray.async(items, tokens, undefined, signal);
 		} else {
-			return QuickScoreArray.async(items, tokens);
+			return QuickScoreArray.async(items, tokens, undefined, signal);
 		}
 	} else {
-		return SimpleScoreArray.async(items, tokens);
+		return SimpleScoreArray.async(items, tokens, undefined, signal);
 	}
 }

@@ -78,20 +78,27 @@ export default function(
 	}
 
 
+	function initItem(
+		item)
+	{
+		if (!item.scores) {
+			item.score = 0;
+			item.scores = {};
+			item.hitMasks = {};
+
+			keys.forEach(({key}) => {
+				item.scores[key] = 0;
+				item.hitMasks[key] = [];
+			});
+		}
+	}
+
+
 	function initItems(
 		items)
 	{
-		if (items.length && !items[0].scores) {
-			items.forEach(function(item) {
-				item.score = 0;
-				item.scores = {};
-				item.hitMasks = {};
-
-				keys.forEach(({key}) => {
-					item.scores[key] = 0;
-					item.hitMasks[key] = [];
-				});
-			});
+		for (let i = 0, len = items.length; i < len; i++) {
+			initItem(items[i]);
 		}
 	}
 
@@ -187,9 +194,68 @@ export default function(
 	scoreArraySync.async = async function scoreArrayAsync(
 		items,
 		tokens,
-		chunkSize = 2000)
+		chunkSize = 2000,
+		signal = null)
 	{
 		initItems(items);
+
+		// early termination config
+		const TopKSize = 50;
+		const MaxLowChunks = 3;
+		const MinChunksBeforeTermination = 3;
+
+		const topKScores = [];
+		let consecutiveLowChunks = 0;
+		let chunksProcessed = 0;
+
+		function updateTopK(chunkStart, chunkEnd) {
+			for (let i = chunkStart; i < chunkEnd; i++) {
+				const s = items[i].score;
+
+				if (topKScores.length < TopKSize) {
+					topKScores.push(s);
+
+					if (topKScores.length === TopKSize) {
+						topKScores.sort((a, b) => a - b);
+					}
+				} else if (s > topKScores[0]) {
+					topKScores[0] = s;
+					topKScores.sort((a, b) => a - b);
+				}
+			}
+		}
+
+		function shouldTerminate(chunkStart, chunkEnd) {
+			chunksProcessed++;
+
+			if (chunksProcessed <= MinChunksBeforeTermination
+				|| topKScores.length < TopKSize) {
+				return false;
+			}
+
+			const threshold = topKScores[0];
+
+			if (threshold <= 0) {
+				return false;
+			}
+
+			// check if any item in this chunk exceeded the top-K minimum
+			let chunkMax = 0;
+
+			for (let i = chunkStart; i < chunkEnd; i++) {
+				if (items[i].score > chunkMax) {
+					chunkMax = items[i].score;
+				}
+			}
+
+			if (chunkMax < threshold * 0.5) {
+				consecutiveLowChunks++;
+			} else {
+				consecutiveLowChunks = 0;
+			}
+
+			return consecutiveLowChunks >= MaxLowChunks;
+		}
 
 		if (tokens.length === 1) {
 				// single token scoring is relatively fast, process in chunks
@@ -215,8 +281,19 @@ export default function(
 					}, 0);
 				}
 
+				updateTopK(i, end);
+
+				if (shouldTerminate(i, end)) {
+					// trim unscored items (they remain with score 0)
+					break;
+				}
+
 				if (end < items.length) {
 					await yieldToMain();
+
+					if (signal && signal.aborted) {
+						return items;
+					}
 				}
 			}
 		} else if (tokens.length > 1) {
@@ -225,8 +302,18 @@ export default function(
 
 				scoreMultipleTokens(items, tokens, i, end);
 
+				updateTopK(i, end);
+
+				if (shouldTerminate(i, end)) {
+					break;
+				}
+
 				if (end < items.length) {
 					await yieldToMain();
+
+					if (signal && signal.aborted) {
+						return items;
+					}
 				}
 			}
 		}
