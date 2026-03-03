@@ -22,6 +22,7 @@ import adaptiveHistory from "@/background/adaptive-history";
 import historyDB from "@/background/history-db";
 import * as k from "@/background/constants";
 import _ from "lodash";
+import ModeDataStore from "./mode-data-store";
 
 
 const MinScore = .04;
@@ -101,9 +102,7 @@ function notEqual(
 export default class App extends React.Component {
 	visible = false;
 	mode = "tabs";
-	tabsPromise = null;
-	bookmarksPromise = null;
-	historyPromise = null;
+	activeStore = null;
 	forceUpdate = false;
 	selectAllSearchBoxText = false;
 	openedForSearch = false;
@@ -147,13 +146,26 @@ export default class App extends React.Component {
 		this.openedForSearch = props.focusSearch;
 		this.navigatingRecents = props.navigatingRecents;
 		this.tabs = [];
-		this.bookmarks = [];
-		this.history = [];
 		this.recents = [];
-			// this array is always empty, and is only used by getMatchingItems()
-			// when a / is typed and the mode is "command"
-		this.command = [];
-		this.openTabs = [];
+
+			// each mode has its own independent data store to prevent
+			// data leakage across mode switches
+		this.modeStores = {
+			tabs: new ModeDataStore("tabs"),
+			bookmarks: new ModeDataStore("bookmarks"),
+			history: new ModeDataStore("history"),
+			openTabs: new ModeDataStore("openTabs"),
+			command: new ModeDataStore("command"),
+		};
+
+			// mixed mode (default tabs scope) uses separate stores from
+			// the /h and /b modes, since they need different data volumes
+		this.mixedStores = {
+			history: new ModeDataStore("mixedHistory"),
+			bookmarks: new ModeDataStore("mixedBookmarks"),
+		};
+
+		this.activeStore = this.modeStores.tabs;
 		this.settings = settings.getDefaults();
 		this.prefetchedData = props.prefetchedData || null;
 		this.settingsPromise = this.updateSettings();
@@ -312,7 +324,7 @@ export default class App extends React.Component {
 			// height, but only in the popup case, since the toolbar menu does
 			// this automatically.  and only if the current mode's promise is
 			// loaded, so that the window doesn't flicker while loading items.
-		if (this.props.isPopup && this[this.mode].length) {
+		if (this.props.isPopup && this.activeStore.length) {
 				// since we want to measure the body and window heights only after
 				// the browser paints, do the check in a requestAnimationFrame.
 				// cancel any pending requests first, since we sometimes get
@@ -338,27 +350,51 @@ export default class App extends React.Component {
 	}
 
 
-	loadPromisedItems(
+	loadStoreItems(
+		store,
 		loader,
-		itemName,
-		reload = false)
+		expectedMaxItems = 0)
 	{
-		const promiseName = itemName + "Promise";
-
-		if (!this[promiseName] || reload) {
-				// store the promise so we only load the items once
-			this[promiseName] = loader().then(items => {
-					// score the items so the expected keys are added
-					// to each one, and then update the results list with
-					// matches on the current query
-				this[itemName] = scoreItems(items, []);
-				this.setQuery(this.state.query);
-
-				return items;
-			});
+			// reuse the existing promise if data is already loaded with
+			// matching maxItems, or if a load is currently in progress
+			// with matching maxItems (prevents repeated requests while
+			// the user is typing before data arrives)
+		if (store.promise && store.maxItems === expectedMaxItems) {
+			return store.promise;
 		}
 
-		return this[promiseName];
+		store.maxItems = expectedMaxItems;
+		store.promise = loader().then(items => {
+				// score the items so the expected keys are added
+				// to each one, and then update the results list with
+				// matches on the current query
+			store.items = scoreItems(items, []);
+			this.setQuery(this.state.query);
+
+			return items;
+		});
+
+		return store.promise;
+	}
+
+
+	loadTabsStore(
+		loader)
+	{
+			// tabs always force a reload, so no caching check needed.
+			// store the promise on modeStores.tabs for componentDidUpdate
+			// and other callers that need to check if tabs have loaded.
+		const store = this.modeStores.tabs;
+
+		store.promise = loader().then(items => {
+			this.tabs = scoreItems(items, []);
+			store.items = this.tabs;
+			this.setQuery(this.state.query);
+
+			return items;
+		});
+
+		return store.promise;
 	}
 
 
@@ -449,7 +485,7 @@ export default class App extends React.Component {
 		};
 
 			// pass true to always force a reload
-		return this.loadPromisedItems(loader, "tabs", true)
+		return this.loadTabsStore(loader)
 			.then(tabs => {
 					// after the initial render without frecency, try to apply
 					// frecency asynchronously so the list appears immediately
@@ -476,67 +512,67 @@ export default class App extends React.Component {
 
 		if (searchBoxTextLC.indexOf(BookmarksQuery) == 0) {
 			this.mode = "bookmarks";
+			this.activeStore = this.modeStores.bookmarks;
 			query = searchBoxText.slice(BookmarksQuery.length);
 
-		if (!this.bookmarks.length) {
-				// we haven't fetched the bookmarks yet, so load them
-				// and then call getMatchingItems() after they're ready
-			this.loadPromisedItems(
-				() => getBookmarks(showBookmarkPaths, usePinyin),
-				"bookmarks"
+			// /b mode uses its own bookmarks store
+			this.loadStoreItems(
+				this.modeStores.bookmarks,
+				() => getBookmarks(showBookmarkPaths, usePinyin)
 			);
-		}
-	} else if (searchBoxTextLC.indexOf(HistoryQuery) == 0) {
+		} else if (searchBoxTextLC.indexOf(HistoryQuery) == 0) {
 			this.mode = "history";
+			this.activeStore = this.modeStores.history;
 			query = searchBoxText.slice(HistoryQuery.length);
 
-			if (!this.history.length) {
-				this.loadPromisedItems(
+			// /h mode uses its own history store with maxHistoryItems
+			this.loadStoreItems(
+				this.modeStores.history,
 				() => getHistory(usePinyin, enableUnlimitedHistory, this.isEnhancedSearchEnabled(), maxHistoryItems),
-					"history"
-				);
-			}
+				maxHistoryItems
+			);
 		} else if (searchBoxTextLC.indexOf(TabsOnlyQuery) == 0) {
 			this.mode = "openTabs";
+			this.activeStore = this.modeStores.openTabs;
 			query = searchBoxText.slice(TabsOnlyQuery.length);
 
-			if (!this.openTabs.length) {
-				this.openTabs = this.tabs.filter(tab => !tab.sessionId);
+			if (!this.modeStores.openTabs.length) {
+				this.modeStores.openTabs.items = this.tabs.filter(tab => !tab.sessionId);
 			}
 		} else if (CommandQueryPattern.test(searchBoxText)) {
 				// we don't know if the user's going to type b or h, so
 				// don't match any items
 			this.mode = "command";
+			this.activeStore = this.modeStores.command;
 			query = "";
-	} else {
+		} else {
 			this.mode = "tabs";
+			this.activeStore = this.modeStores.tabs;
 
 			const scope = this.settings[k.DefaultSearchScope.Key] || k.DefaultSearchScope.Tabs;
 
-			if (scope.includes("history") && !this.history.length) {
-				this.loadPromisedItems(
+			// default mixed mode uses separate stores from /h and /b
+			if (scope.includes("history")) {
+				this.loadStoreItems(
+					this.mixedStores.history,
 					() => getHistory(usePinyin, enableUnlimitedHistory, this.isEnhancedSearchEnabled(), maxMixedHistoryItems),
-					"history"
+					maxMixedHistoryItems
 				);
 			}
 
-			if (scope.includes("bookmarks") && !this.bookmarks.length) {
-				this.loadPromisedItems(
-					() => getBookmarks(showBookmarkPaths, usePinyin),
-					"bookmarks"
+			if (scope.includes("bookmarks")) {
+				this.loadStoreItems(
+					this.mixedStores.bookmarks,
+					() => getBookmarks(showBookmarkPaths, usePinyin)
 				);
 			}
 		}
 
 		this.setState({ searchBoxText });
 
-		const effectiveMaxItems = this.mode === "history"
-			? maxHistoryItems
-			: maxMixedHistoryItems;
-		const needsDebounce = effectiveMaxItems > 10000
-			&& (this.mode === "history"
-				|| (this.mode === "tabs"
-					&& (this.settings[k.DefaultSearchScope.Key] || "").includes("history")));
+		const actualDataSize = this.getActiveDataSize();
+		const needsDebounce = actualDataSize > 10000
+			|| (this.mode === "history" && maxHistoryItems > 10000);
 
 		if (needsDebounce && query) {
 			this.setState({ searching: true, query });
@@ -649,8 +685,8 @@ export default class App extends React.Component {
 		const tabURLs = new Set(this.tabs.map(t => t.url));
 		let merged = [...this.tabs];
 
-		if (includeHistory && this.history.length) {
-			const newHistoryItems = this.history.filter(item => !tabURLs.has(item.url));
+		if (includeHistory && this.mixedStores.history.length) {
+			const newHistoryItems = this.mixedStores.history.items.filter(item => !tabURLs.has(item.url));
 
 			for (const item of newHistoryItems) {
 				tabURLs.add(item.url);
@@ -660,8 +696,8 @@ export default class App extends React.Component {
 			merged = merged.concat(newHistoryItems);
 		}
 
-		if (includeBookmarks && this.bookmarks.length) {
-			const newBookmarkItems = this.bookmarks.filter(item => !tabURLs.has(item.url));
+		if (includeBookmarks && this.mixedStores.bookmarks.length) {
+			const newBookmarkItems = this.mixedStores.bookmarks.items.filter(item => !tabURLs.has(item.url));
 
 			for (const item of newBookmarkItems) {
 				item.source = "bookmarks";
@@ -671,6 +707,27 @@ export default class App extends React.Component {
 		}
 
 		return merged;
+	}
+
+
+	getActiveDataSize()
+	{
+		if (this.mode === "tabs") {
+			const scope = this.settings[k.DefaultSearchScope.Key] || k.DefaultSearchScope.Tabs;
+			let size = this.tabs.length;
+
+			if (scope.includes("history")) {
+				size += this.mixedStores.history.length;
+			}
+
+			if (scope.includes("bookmarks")) {
+				size += this.mixedStores.bookmarks.length;
+			}
+
+			return size;
+		}
+
+		return this.activeStore.length;
 	}
 
 
@@ -688,7 +745,7 @@ export default class App extends React.Component {
 		const scope = this.settings[k.DefaultSearchScope.Key] || k.DefaultSearchScope.Tabs;
 		const dataSource = (this.mode === "tabs" && scope !== k.DefaultSearchScope.Tabs)
 			? this.getMergedItems()
-			: this[this.mode];
+			: this.activeStore.items;
 		const items = scoreItems(dataSource, tokens, this.settings[k.UsePinyin.Key]);
 
 		if (!query) {
@@ -701,13 +758,13 @@ export default class App extends React.Component {
 
 				case "openTabs":
 						// return all open tabs sorted by recent usage
-					return this.openTabs;
+					return this.activeStore.items;
 
 				case "history":
 						// special case the /h query so that we can sort the
 						// history items by visit date and show them as soon
 						// as the command is typed with no query
-					return this.history.sort(sortHistoryItems);
+					return this.activeStore.items.sort(sortHistoryItems);
 
 				default:
 						// return bookmarks sorted alphabetically.  for the
@@ -763,7 +820,7 @@ export default class App extends React.Component {
 		const scope = this.settings[k.DefaultSearchScope.Key] || k.DefaultSearchScope.Tabs;
 		const dataSource = (this.mode === "tabs" && scope !== k.DefaultSearchScope.Tabs)
 			? this.getMergedItems()
-			: this[this.mode];
+			: this.activeStore.items;
 		const items = await scoreItemsAsync(dataSource, tokens, this.settings[k.UsePinyin.Key]);
 
 		if (!query) {
@@ -772,10 +829,10 @@ export default class App extends React.Component {
 					return this.recents;
 
 				case "openTabs":
-					return this.openTabs;
+					return this.activeStore.items;
 
 				case "history":
-					return this.history.sort(sortHistoryItems);
+					return this.activeStore.items.sort(sortHistoryItems);
 
 				default:
 					return items;
@@ -929,7 +986,13 @@ export default class App extends React.Component {
 			eventCategory = mode) =>
 		{
 			deleteFunc(item);
-			_.pull(this[mode], item);
+			_.pull(this.activeStore.items, item);
+
+				// in hybrid mode (tabs with scope), also remove from the
+				// source mixedStore so the item won't reappear on re-search
+			if (item.source && this.mixedStores[item.source]) {
+				_.pull(this.mixedStores[item.source].items, item);
+			}
 
 				// call getMatchingItems() to get the updated results list
 				// minus the item we removed.  limit the selected index to
@@ -1311,15 +1374,10 @@ export default class App extends React.Component {
 			this.visible = false;
 			this.navigatingRecents = false;
 
-				// clear any bookmarks or history we might have loaded while
-				// the window was open, since they may be different the next
-				// time the user accesses them.  this way we won't show
-				// stale data.
-			this.bookmarks = [];
-			this.bookmarksPromise = null;
-			this.history = [];
-			this.historyPromise = null;
-			this.openTabs = [];
+			// clear all mode stores so stale data isn't shown
+				// the next time the user accesses them
+			Object.values(this.modeStores).forEach(store => store.clear());
+			Object.values(this.mixedStores).forEach(store => store.clear());
 
 			if (this.debouncedSetQuery) {
 				this.debouncedSetQuery.cancel();
@@ -1587,7 +1645,7 @@ export default class App extends React.Component {
 
 		case "focusSearch":
 				this.gotMRUKey = false;
-				this.tabsPromise.then(() => this.setState({ selected: -1 }));
+				this.modeStores.tabs.promise.then(() => this.setState({ selected: -1 }));
 				break;
 
 			case "prefetchedFrecencyMap":
