@@ -72,11 +72,11 @@
 	}
 
 	.results-list-item.selected {
-		--background: #35373b;
+		--background: rgba(138, 180, 248, 0.12);
 	}
 
 	.results-list-item:not(.selected):hover {
-		--background: #2b2d31;
+		--background: rgba(255, 255, 255, 0.06);
 	}
 
 	.results-list-item div b, .search-box input {
@@ -129,7 +129,7 @@ html, body {
 body {
 	background: var(--background, #fff);
 	color: var(--color, #222);
-	font-size: 14px;
+	font-size: 13px;
 	line-height: 1.5;
 	-webkit-user-select: none;
 	user-select: none;
@@ -188,19 +188,19 @@ img {
 
 .search-box {
 	position: relative;
-	--input-padding-left: 32px;
+	--input-padding-left: 36px;
 }
 
 .search-box input, .command-placeholder {
-	font-size: 14px;
+	font-size: 13px;
 	font-weight: 600;
-	width: calc(100% - 12px);
+	width: calc(100% - 16px);
 	height: 32px;
-	margin: 6px;
-	padding: 4px 26px 4px var(--input-padding-left);
+	margin: 8px;
+	padding: 4px 34px 4px var(--input-padding-left);
 	background-color: var(--search-bg, #f5f6f8);
 	border: 1px solid var(--search-border, #e0e2e6);
-	border-radius: 8px;
+	border-radius: 100px;
 	outline: none;
 	transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
 }
@@ -215,7 +215,7 @@ img {
 .search-box .loading.icon {
 	top: 50%;
 	transform: translateY(-50%);
-	left: calc(var(--input-padding-left) - 18px);
+	left: calc(var(--input-padding-left) - 20px);
 	position: absolute;
 	transition: fill 0.2s ease;
 }
@@ -234,8 +234,8 @@ img {
 
 .firefox .search-box .cancel-button {
 	display: block;
-	top: 5px;
-	right: 27px;
+	top: 7px;
+	right: 29px;
 	position: absolute;
 }
 
@@ -295,7 +295,7 @@ img {
 
 .mode-badge {
 	position: absolute;
-	left: 14px;
+	left: 18px;
 	top: 50%;
 	transform: translateY(-50%);
 	height: 16px;
@@ -313,19 +313,19 @@ img {
 }
 
 .search-box.has-badge {
-	--input-padding-left: 56px;
+	--input-padding-left: 60px;
 }
 
 .search-box.has-badge .search.icon,
 .search-box.has-badge .loading.icon {
-	left: 42px;
+	left: 46px;
 }
 
 .options-button {
 	width: 24px;
 	height: 24px;
-	top: 10px;
-	right: 10px;
+	top: 12px;
+	right: 16px;
 	padding: 4px;
 	border-radius: 6px;
 	text-align: center;
@@ -389,16 +389,16 @@ img {
 	text-overflow: ellipsis;
 	overflow: hidden;
 	position: relative;
-	border-radius: 6px;
+	border-radius: 8px;
 	transition: background-color 0.12s ease;
 }
 
 .results-list-item:not(.selected):hover {
-	background-color: var(--background, #f3f4f6);
+	background-color: var(--background, rgba(0, 0, 0, 0.04));
 }
 
 .results-list-item.selected {
-	background-color: var(--background, #e8eaee);
+	background-color: var(--background, rgba(66, 133, 244, 0.08));
 }
 
 .results-list-item .favicon {
