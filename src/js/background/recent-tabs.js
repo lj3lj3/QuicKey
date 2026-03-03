@@ -166,6 +166,7 @@ function add(
 				// closing it without doing anything, so update its
 				// lastVisit time to now
 			addVisit(lastTab);
+DEBUG && console.log("add (refocus)", `${tab.id}|${tab.windowId}`, "lastVisit:", lastTab.lastVisit, titleOrURL(tab));
 
 			return { tabsByID };
 		}
@@ -174,6 +175,7 @@ function add(
 		tabData = createRecent(tab, tabsByID[id]);
 		addVisit(tabData);
 		tabsByID[id] = tabData;
+DEBUG && console.log("add (new)", `${tab.id}|${tab.windowId}`, "lastVisit:", tabData.lastVisit, titleOrURL(tab));
 
 			// make sure the new tab's ID isn't currently in the list
 		removeItem(tabIDs, id);
@@ -269,7 +271,6 @@ DEBUG && console.log("tab replaced", oldID, "index", index, getRecentStackString
 
 function getAll(
 	includeClosedTabs,
-	storageData,
 	cachedTabData)
 {
 const t = performance.now();
@@ -299,6 +300,8 @@ const t = performance.now();
 				const {tabIDs} = data;
 				const tabsByURL = {};
 				const {tabsByID} = data;
+DEBUG && console.log("getAll processor: tabIDs (last 5):", tabIDs.slice(-5),
+	"lastVisits:", tabIDs.slice(-5).map(id => `${id}:${tabsByID[id]?.lastVisit}`));
 // TODO: should use startsWith
 				let tabs = freshTabs.filter(({url}) => !url.includes(PopupURL));
 
@@ -369,19 +372,43 @@ const t = performance.now();
 				// storage.set() for getAll() so that the popup doesn't
 				// have to wait for the data to get stored before it's
 				// returned, to make the recents menu render faster.
-			storage.set(() => ({ tabsByID }));
+				// use the latest data from storage (passed by doTask)
+				// and merge the processor's tabsByID entries into it,
+				// to avoid overwriting any tabsByID updates that were
+				// written by addTab between when getAll() read the data
+				// and when this set() acquires the lock.
+			storage.set((latestData) => {
+				const mergedTabsByID = { ...latestData.tabsByID };
+
+				for (const [id, processorTab] of Object.entries(tabsByID)) {
+					const latestTab = latestData.tabsByID[id];
+
+					if (latestTab) {
+							// merge processor's updated fields (url, windowId, etc.)
+							// but keep the newer lastVisit from either source,
+							// since addTab may have written a newer lastVisit
+							// between when getAll() read the data and now
+						mergedTabsByID[id] = {
+							...processorTab,
+							lastVisit: Math.max(processorTab.lastVisit || 0, latestTab.lastVisit || 0)
+						};
+					} else {
+						mergedTabsByID[id] = processorTab;
+					}
+				}
+DEBUG && console.log("getAll storage.set merge: processor keys:", Object.keys(tabsByID).length, "latest keys:", Object.keys(latestData.tabsByID).length);
+
+				return { tabsByID: mergedTabsByID };
+			});
 
 DEBUG && console.log("getAll took", performance.now() - t, "ms");
 				return tabs;
 			});
 	};
 
-	// if pre-fetched storage data is provided, use it directly to avoid
-	// a redundant storage.get() call
-	if (storageData) {
-		return processor(storageData);
-	}
-
+	// always read fresh data from storage to ensure the latest lastVisit
+	// values from addTab are included, even if the caller has pre-fetched
+	// storage data that may be stale
 	return storage.get(processor);
 }
 

@@ -190,6 +190,7 @@ function handleTabActivated({
 	if (Number.isInteger(tabId) && tabId !== popupWindow.tabID && !navigatingRecents) {
 		lastActivatedTabId = tabId;
 		lastActivatedTime = Date.now();
+DEBUG && console.log("--- handleTabActivated: addTab", tabId, "navigatingRecents:", navigatingRecents);
 		addTab(tabId);
 
 		if (ports.popup) {
@@ -353,9 +354,12 @@ async function navigateRecents(
 				setNavigatingRecents(true);
 
 					// execute any pending tab activation event so the recents
-					// list is up-to-date before we start navigating.  we have to
-					// do this regardless of whether the popup is open or not.
-				await addTab.execute();
+					// list is up-to-date before we start navigating, but only
+					// if the user stayed on that tab long enough to meet the
+					// minimum dwell time.  otherwise, cancel it to avoid
+					// recording tabs the user only briefly passed through.
+DEBUG && console.log("--- navigateRecents: executing pending addTab before navigation");
+				await addTab.execute(false, true);
 
 				if (!ports.popup) {
 						// since the popup isn't currently open, we rely on it
@@ -363,6 +367,11 @@ async function navigateRecents(
 						// and then change the selection instead of sending it
 						// the modifySelected message below
 					await openPopupWindow();
+
+						// re-set navigatingRecents after openPopupWindow(),
+						// because create() calls close() internally which
+						// emits a "close" event that resets it to false
+					setNavigatingRecents(true);
 				} else {
 					sendPopupMessage("modifySelected", {
 						direction: -direction,
@@ -465,6 +474,7 @@ function disableCommands()
 
 
 function setNavigatingRecents(value) {
+DEBUG && console.log("--- setNavigatingRecents:", value, new Error().stack?.split("\n")[2]?.trim());
 	navigatingRecents = value;
 
 	if (value) {
@@ -493,8 +503,7 @@ popupWindow.on(["hide", "close"], () => setNavigatingRecents(false));
 	// so data is ready to push as soon as popup connects
 popupWindow.on("create", () => {
 	refreshTabCache();
-	prefetchedStoragePromise = chrome.storage.local.get(null)
-		.then(result => result?.data)
+	prefetchedStoragePromise = storage.get()
 		.catch(() => null);
 
 		// prefetch frecency data by querying chrome.history for each open tab.
@@ -641,8 +650,7 @@ chrome.runtime.onConnect.addListener(port => {
 			// doesn't have to make separate IPC calls for each one
 		const tabsPromise = cachedTabs || chrome.tabs.query({});
 		const sessionsPromise = cachedSessions || chrome.sessions.getRecentlyClosed();
-		const storagePromise = prefetchedStoragePromise || chrome.storage.local.get(null)
-			.then(result => result?.data)
+const storagePromise = prefetchedStoragePromise || storage.get()
 			.catch(() => null);
 
 		Promise.all([tabsPromise, sessionsPromise, storagePromise])
@@ -700,8 +708,14 @@ chrome.runtime.onConnect.addListener(port => {
 		activeTab = null;
 
 			// ensure navigatingRecents is reset when the popup disconnects,
-			// in case the popup closed without sending stopNavigatingRecents
-		setNavigatingRecents(false);
+			// in case the popup closed without sending stopNavigatingRecents.
+			// but don't reset it if we're currently navigating recents, since
+			// that means create() is closing the old popup to reopen a new
+			// one, and we need to keep navigatingRecents true to prevent
+			// tab activation events during window creation from being recorded.
+		if (!navigatingRecents) {
+			setNavigatingRecents(false);
+		}
 //console.log("---- background: onDisconnect", port.name);
 
 		if (port.name == "popup") {
@@ -736,7 +750,14 @@ chrome.runtime.onMessage.addListener(({message, ...payload}, sender, sendRespons
 			// response was received" errors
 		(async () => {
 			sendResponse(await handler(payload));
-			await addTab.execute();
+
+				// only execute pending addTab when the user has made a final
+				// tab selection (not navigating through recents).  during
+				// recents navigation, focusTab is called for each "previewed"
+				// tab, and we don't want to record those intermediate tabs.
+			if (!navigatingRecents) {
+				await addTab.execute();
+			}
 		})();
 		asyncResponse = true;
 	} else if (message === "executeAddTab") {

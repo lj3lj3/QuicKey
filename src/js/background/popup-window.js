@@ -112,8 +112,10 @@ async function create(
 	props = {},
 	alignment)
 {
-		// close any existing window, in case one was still open
-	await close();
+	// close any existing window, in case one was still open.
+	// suppress events so that the "close" event doesn't reset
+	// navigatingRecents when we're just recreating the popup.
+	await close(true);
 
 	const propsJSON = JSON.stringify(props);
 		// get the full URL with the extension ID in it so that we can
@@ -371,7 +373,7 @@ async function resize(
 }
 
 
-async function close()
+async function close(suppressEvents = false)
 {
 		// look for any open popup tabs.  there should only ever be one, but
 		// at least one time, two got opened, so get them all to be safe.
@@ -389,7 +391,7 @@ async function close()
 		await chrome.tabs.remove(openTabs.map(({id}) => id));
 	} catch (e) {}
 
-	if (originalWindowID) {
+	if (originalWindowID && !suppressEvents) {
 			// close() may be called even when there's no open popup, so only
 			// dispatch the event if the window was actually open
 		popupEmitter.emit("close", { windowID: originalWindowID });

@@ -479,14 +479,13 @@ export default class App extends React.Component {
 				// reset frecency state for this load cycle
 			this.frecencyApplied = false;
 
-				// pass pre-fetched storage data and cached tab data to
-				// recentTabs.getAll() to avoid redundant API calls
+				// pass cached tab data to recentTabs.getAll() to avoid
+				// redundant chrome.tabs.query/sessions API calls
 			const tabs = await initTabs(
 					// don't include recently closed tabs when navigating
 					// recents, since you can't navigate to them
 				recentTabs.getAll(
 					!this.navigatingRecents && settings[k.IncludeClosedTabs.Key],
-					this.lastStorageData,
 					cachedTabData
 				),
 					// when we're navigating recents, we want to include the
@@ -511,6 +510,9 @@ export default class App extends React.Component {
 			this.recents = tabs
 				.filter(recentsFilter)
 				.sort(sortRecents)
+
+DEBUG && console.log("loadTabs recents (top 5):", this.recents.slice(0, 5).map(
+	t => `${t.id}:${t.lastVisit}:${(t.title || t.url || "").slice(0, 30)}`));
 
 			if (!this.recents.length) {
 				this.recents = this.settings[k.CurrentWindowLimitRecents.Key]
@@ -1301,8 +1303,7 @@ export default class App extends React.Component {
 			? Promise.resolve(this.prefetchedData.storageData)
 			: storage.get());
 
-			// save storage data so it can be reused by recentTabs.getAll()
-			// to avoid a redundant storage.get() call
+			// save storage data for use in settings-dependent logic
 		this.lastStorageData = data;
 
 		this.setState({
