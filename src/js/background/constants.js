@@ -32,7 +32,7 @@ export const PopupURL = chrome.runtime.getURL("popup.html");
 export const PopupInnerWidth = 500;
 export const PopupInnerHeight = 488;
 export const PopupPadding = 50;
-export const ResultsListRowHeight = 45;
+export const ResultsListRowHeight = 48;
 export const CommandIDs = {
 	OpenMenuCommand: "_execute_action",
 	OpenPopupCommand: "010-open-popup-window",
