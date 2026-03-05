@@ -301,13 +301,15 @@ export default class App extends React.Component {
 		});
 
 		// eager init adaptive history when enhanced search is enabled
-		if (this.isEnhancedSearchEnabled()) {
-			if (!adaptiveHistory.isLoaded()) {
+		// wait for settingsPromise so that the real user settings are loaded
+		// before checking isEnhancedSearchEnabled, whose default is false
+		this.settingsPromise.then(() => {
+			if (this.isEnhancedSearchEnabled() && !adaptiveHistory.isLoaded()) {
 				historyDB.getDB()
 					.then(db => adaptiveHistory.init(db))
 					.catch(err => console.error("[enhanced-search] init failed:", err));
 			}
-		}
+		});
 
 		this.visible = true;
 		this.port = this.props.port;
