@@ -28,6 +28,7 @@ import ModeDataStore from "./mode-data-store";
 const MinScore = .04;
 const NearlyZeroScore = .02;
 const MaxItems = 10;
+const MaxResultCount = 200;
 const MinItems = 4;
 const MinScoreDiff = .1;
 const DefaultMaxHistoryItems = 10000;
@@ -992,7 +993,7 @@ DEBUG && console.log("loadTabs recents (top 5):", this.recents.slice(0, 5).map(
 				(score < minScore && (i + 1 > MinItems || firstScoresDiff > minScoreDiff))
 		);
 
-		return matchingItems;
+		return matchingItems.slice(0, MaxResultCount);
 	}
 
 
@@ -1053,7 +1054,7 @@ DEBUG && console.log("loadTabs recents (top 5):", this.recents.slice(0, 5).map(
 				(score < minScore && (i + 1 > MinItems || firstScoresDiff > minScoreDiff))
 		);
 
-		return matchingItems;
+		return matchingItems.slice(0, MaxResultCount);
 	}
 
 
