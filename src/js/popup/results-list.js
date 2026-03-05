@@ -6,7 +6,7 @@ import {IsFirefox, ResultsListRowHeight} from "@/background/constants";
 	// in FF, the scrollbar appears inside the right edge of the scrolling
 	// area, instead on the outside.  so make the virtual list go right to
 	// the edge of the popup, so the scrollbar doesn't cover the content.
-const ScrollbarPadding = IsFirefox ? 5 : 10;
+const ScrollbarPadding = IsFirefox ? 5 : 0;
 const MinShownTime = 200;
 
 

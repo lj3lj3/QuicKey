@@ -118,6 +118,7 @@ export default class App extends React.Component {
 	visible = false;
 	mode = "tabs";
 	previousMode = "tabs";
+	previousQuery = "";
 	activeStore = null;
 	forceUpdate = false;
 	selectAllSearchBoxText = false;
@@ -612,7 +613,10 @@ DEBUG && console.log("loadTabs recents (top 5):", this.recents.slice(0, 5).map(
 	} else if (searchBoxText === "/") {
 			// just a slash: user is starting to type a command,
 			// don't match any items
-			this.previousMode = this.mode !== "command" ? this.mode : this.previousMode;
+			if (this.mode !== "command") {
+				this.previousMode = this.mode;
+				this.previousQuery = this.state.query || "";
+			}
 			this.mode = "command";
 			this.activeStore = this.modeStores.command;
 			query = "";
@@ -620,7 +624,10 @@ DEBUG && console.log("loadTabs recents (top 5):", this.recents.slice(0, 5).map(
 			// user has typed /b, /h, or /t — stay in command mode
 			// and show the placeholder prompt; the actual mode switch
 			// happens when they press Tab
-			this.previousMode = this.mode !== "command" ? this.mode : this.previousMode;
+			if (this.mode !== "command") {
+				this.previousMode = this.mode;
+				this.previousQuery = this.state.query || "";
+			}
 			this.mode = "command";
 			this.activeStore = this.modeStores.command;
 			query = "";
@@ -739,12 +746,13 @@ DEBUG && console.log("loadTabs recents (top 5):", this.recents.slice(0, 5).map(
 	{
 		const {searchBoxText} = this.state;
 		const match = CommandExactPattern.exec(searchBoxText);
+		const savedQuery = this.previousQuery || "";
 
 		if (!match) {
 				// the user typed "/" without specifying a mode letter,
-				// restore the previous mode
+				// restore the previous mode with the previous query
 			this.forceUpdate = true;
-			this.setSearchBoxText(ModePrefixMap[this.previousMode] || "");
+			this.setSearchBoxText((ModePrefixMap[this.previousMode] || "") + savedQuery);
 
 			return;
 		}
@@ -757,19 +765,20 @@ DEBUG && console.log("loadTabs recents (top 5):", this.recents.slice(0, 5).map(
 			const prefix = ModePrefixMap[targetMode] || "";
 
 			this.forceUpdate = true;
-			this.setSearchBoxText(prefix);
+			this.setSearchBoxText(prefix + savedQuery);
 		}
 	}
 
 
 	cancelCommandMode()
 	{
-			// cancel command mode and restore the previous mode with
-			// an empty query, discarding the typed command text
+			// cancel command mode and restore the previous mode
+			// with the previous query
 		const prefix = ModePrefixMap[this.previousMode] || "";
+		const savedQuery = this.previousQuery || "";
 
 		this.forceUpdate = true;
-		this.setSearchBoxText(prefix);
+		this.setSearchBoxText(prefix + savedQuery);
 	}
 
 
@@ -780,9 +789,10 @@ DEBUG && console.log("loadTabs recents (top 5):", this.recents.slice(0, 5).map(
 		const nextIndex = (currentIndex + direction + ModeCycle.length) % ModeCycle.length;
 		const nextMode = ModeCycle[nextIndex];
 
-		// synthesize the searchBoxText for the new mode with empty query
+		// synthesize the searchBoxText for the new mode, preserving current query
 		const prefix = ModePrefixMap[nextMode] || "";
-		const newSearchBoxText = prefix;
+		const currentQuery = this.state.query || "";
+		const newSearchBoxText = prefix + currentQuery;
 
 		this.forceUpdate = true;
 		this.setSearchBoxText(newSearchBoxText);
