@@ -130,7 +130,7 @@ export default class SearchBox extends React.Component {
 			// only show the default input placeholder in the default tabs
 			// mode; in other modes the command-placeholder overlay handles it
 		const inputPlaceholder = (mode === "tabs")
-			? "Search for a tab title or URL, or type / for more options"
+			? "Search all — Tab to switch mode, / for options"
 			: "";
 
 		return <div className="search-box has-badge">
@@ -156,7 +156,7 @@ export default class SearchBox extends React.Component {
 			{mode == "openTabs" && pureQuery.length == 0 &&
 				<Placeholder mode={mode} text="Search only open tabs" />}
 		{mode == "command" &&
-				<Placeholder mode={mode} shortcut="/b" text="Type b for bookmarks, h for history, or t for open tabs, then press Tab" />}
+			<Placeholder mode={mode} shortcut="/b" text="b=bookmarks, h=history, t=tabs, then Tab" />}
 			{(IsFirefox && (pureQuery.length > 0 || mode !== "tabs")) &&
 				<div
 					className="cancel-button"

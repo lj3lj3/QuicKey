@@ -98,6 +98,18 @@ If you type more than 25 letters, which should be plenty to find the right tab, 
 Recently used tabs get a slight boost in the search results ranking, so getting back to a tab you were just using should require typing fewer letters.
 
 
+## Switch search modes with <kbd>Tab</kbd>
+
+You can press <kbd>Tab</kbd> to cycle through the different search modes without typing a command prefix:
+
+  * **Tabs** → **Bookmarks** → **History** → **Tabs** → ...
+  * Press <b><kbd>shift</kbd><kbd>Tab</kbd></b> to cycle in the reverse direction.
+
+This is a quick alternative to typing <b><kbd>/</kbd><kbd>b</kbd><kbd>space</kbd></b> or <b><kbd>/</kbd><kbd>h</kbd><kbd>space</kbd></b> to switch modes.  Your current search query is preserved when switching, so you can easily re-run the same search across different modes.
+
+You can also type <kbd>/</kbd> followed by a mode letter (<kbd>b</kbd> for bookmarks, <kbd>h</kbd> for history, or <kbd>t</kbd> for open tabs) and then press <kbd>Tab</kbd> to jump directly to that mode.
+
+
 ## Enhanced search
 
 Enable **Enhanced search** on the Options page to let *QuicKey* learn from your search selections and provide better results over time.  When enabled, *QuicKey* uses adaptive history and frecency scoring to rank pages you visit frequently or recently higher in the results.
