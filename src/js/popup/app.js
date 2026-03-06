@@ -39,7 +39,7 @@ const CommandQueryPattern = /^\/[bht]$/i;
 const CommandExactPattern = /^\/([bht])$/i;
 const ModeCycle = ["tabs", "history", "bookmarks", "openTabs"];
 const ModeLabels = {
-	tabs: { short: "M", text: "Mix" },
+	tabs: { short: "A", text: "All" },
 	history: { short: "H", text: "History" },
 	bookmarks: { short: "B", text: "Bookmarks" },
 	openTabs: { short: "T", text: "Open Tabs" }
