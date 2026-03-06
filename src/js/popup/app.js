@@ -389,8 +389,13 @@ export default class App extends React.Component {
 				// to each one, and then update the results list with
 				// matches on the current query
 			store.items = scoreItems(items, []);
-			this.setState({ searching: false });
-			this.setQuery(this.state.query);
+
+				// only clear the loading indicator if this store is still
+				// the active one, to avoid cancelling another mode's loading
+			if (this.activeStore === store) {
+				this.setState({ searching: false });
+				this.setQuery(this.state.query);
+			}
 
 			return items;
 		});
@@ -411,14 +416,23 @@ export default class App extends React.Component {
 		store.maxItems = expectedMaxItems;
 
 		const onQuickLoad = (quickItems) => {
-			// render the first batch immediately so the user sees results fast
+			// render the first batch immediately so the user sees results fast,
+			// but keep searching=true since the full dataset is still loading
 			store.items = scoreItems(quickItems, []);
-			this.refreshQuery();
+
+			if (this.activeStore === store) {
+				this.setQuery(this.state.query);
+			}
 		};
 
 		store.promise = loader(onQuickLoad).then(items => {
 			store.items = scoreItems(items, []);
-			this.refreshQuery();
+
+				// only refresh if this store is still the active one,
+				// to avoid interfering with another mode's state
+			if (this.activeStore === store) {
+				this.refreshQuery();
+			}
 
 			return items;
 		});
@@ -460,8 +474,13 @@ export default class App extends React.Component {
 		store.promise = loader().then(items => {
 			this.tabs = scoreItems(items, []);
 			store.items = this.tabs;
-			this.setState({ searching: false });
-			this.setQuery(this.state.query);
+
+				// only clear the loading indicator if tabs mode is still
+				// active, to avoid cancelling another mode's loading
+			if (this.activeStore === store) {
+				this.setState({ searching: false });
+				this.setQuery(this.state.query);
+			}
 
 			return items;
 		});
