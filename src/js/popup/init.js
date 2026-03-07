@@ -31,16 +31,14 @@ let gShortcutCache = [];
 let gClose = false;
 let gOnKeyDown;
 let gPrefetchedData = null;
-let gPrefetchedFrecencyMap = null;
 
 	// listen for prefetched data pushed from background before the main
 	// bundle finishes loading, so the data is ready when App initializes.
-	// frecencyMap arrives separately to avoid blocking the main data push.
+	// frecencyMap is included in the same message to avoid a separate
+	// port round-trip that would cause a loading flash.
 gPort.onMessage.addListener(msg => {
 	if (msg?.message === "prefetchedData") {
 		gPrefetchedData = msg;
-	} else if (msg?.message === "prefetchedFrecencyMap") {
-		gPrefetchedFrecencyMap = msg.frecencyMap;
 	}
 });
 

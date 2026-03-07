@@ -1,6 +1,5 @@
 import decode from "@/lib/decode";
 import {addPinyin} from "./add-pinyin";
-import {calculateFrecencyBoost} from "../score/frecency";
 import _ from "lodash";
 
 
@@ -14,12 +13,6 @@ const RecentBoost = .1;
 const VeryRecentMS = 5 * 1000;
 const VeryRecentBoost = .15;
 const ClosedPenalty = .98;
-
-// cache frecency data to avoid redundant chrome.history.search() calls
-// when tabs are reloaded (e.g. on tab activation events)
-const FrecencyCacheMaxAge = 30 * 1000;
-let frecencyCache = {};
-let frecencyCacheTime = 0;
 
 
 function addRecentBoost(
@@ -43,65 +36,18 @@ function addRecentBoost(
 }
 
 
-async function enrichWithFrecency(tabs, prefetchedFrecencyMap) {
-		// if background already computed a frecencyMap, apply it directly
-		// without any chrome.history.search() IPC calls
-	if (prefetchedFrecencyMap) {
-		for (const tab of tabs) {
-			const boost = prefetchedFrecencyMap[tab.url];
-
-			if (boost) {
-				tab.recentBoost = (tab.recentBoost || 1) * boost;
-			}
-		}
-
-			// seed the local cache with prefetched data so subsequent
-			// calls (e.g. after tab activation) can reuse it
-		frecencyCache = { ...prefetchedFrecencyMap };
-		frecencyCacheTime = Date.now();
-
-		return tabs;
-	}
-
-		// fallback: query chrome.history for each uncached tab URL
-	const now = Date.now();
-
-	if ((now - frecencyCacheTime) > FrecencyCacheMaxAge) {
-		frecencyCache = {};
-	}
-
-	const uncachedTabs = tabs.filter(tab => !(tab.url in frecencyCache));
-
-	if (uncachedTabs.length > 0) {
-		const historyQueries = uncachedTabs.map(tab =>
-			chrome.history.search({ text: tab.url, maxResults: 1, startTime: 0 })
-				.then(results => {
-					const match = results.find(r => r.url === tab.url);
-
-					if (match && match.visitCount && match.lastVisitTime) {
-						frecencyCache[tab.url] = calculateFrecencyBoost(match);
-					} else {
-						frecencyCache[tab.url] = null;
-					}
-				})
-				.catch(() => {
-					frecencyCache[tab.url] = null;
-				})
-		);
-
-		await Promise.all(historyQueries);
-		frecencyCacheTime = now;
+function enrichWithFrecency(tabs, frecencyMap) {
+	if (!frecencyMap) {
+		return;
 	}
 
 	for (const tab of tabs) {
-		const frecencyFactor = frecencyCache[tab.url];
+		const boost = frecencyMap[tab.url];
 
-		if (frecencyFactor) {
-			tab.recentBoost = (tab.recentBoost || 1) * frecencyFactor;
+		if (boost) {
+			tab.recentBoost = (tab.recentBoost || 1) * boost;
 		}
 	}
-
-	return tabs;
 }
 
 

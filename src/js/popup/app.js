@@ -186,6 +186,13 @@ export default class App extends React.Component {
 		this.activeStore = this.modeStores.tabs;
 		this.settings = settings.getDefaults();
 		this.prefetchedData = props.prefetchedData || null;
+
+			// extract frecencyMap from prefetchedData so it's available
+			// from the very first render cycle without a separate message
+		if (this.prefetchedData?.frecencyMap) {
+			this.pendingFrecencyMap = this.prefetchedData.frecencyMap;
+		}
+
 		this.settingsPromise = this.updateSettings();
 			// we're saving the initial value of this prop instead of
 			// getting it every time in render, which is normally bad, but
@@ -580,11 +587,23 @@ DEBUG && console.log("loadTabs recents (top 5):", this.recents.slice(0, 5).map(
 			// pass true to always force a reload
 		return this.loadTabsStore(loader)
 			.then(tabs => {
-					// after the initial render without frecency, try to apply
-					// frecency asynchronously so the list appears immediately
 				if (this.isEnhancedSearchEnabled()) {
-					this.setState({ sortingFrecency: true });
-					this.applyFrecencyAsync();
+					const frecencyMap = this.pendingFrecencyMap || null;
+
+					if (frecencyMap) {
+							// frecencyMap already available (from prefetchedData
+							// or a port message that arrived during loading).
+							// apply it synchronously without showing loading.
+						this.frecencyApplied = true;
+						this.pendingFrecencyMap = null;
+						enrichWithFrecency(this.tabs, frecencyMap);
+						this.setQuery(this.state.query);
+					} else {
+							// frecencyMap hasn't arrived yet; show loading and
+							// wait for it to arrive via applyFrecencyAsync()
+						this.setState({ sortingFrecency: true });
+						this.applyFrecencyAsync();
+					}
 				}
 
 				return tabs;
@@ -1634,33 +1653,25 @@ DEBUG && console.log("loadTabs recents (top 5):", this.recents.slice(0, 5).map(
 			return;
 		}
 
-			// check if a prefetched frecencyMap is available (from props
-			// or from a port message that arrived while loading tabs)
-		const frecencyMap = this.pendingFrecencyMap
-			|| this.props.prefetchedFrecencyMap
-			|| null;
+		const frecencyMap = this.pendingFrecencyMap || null;
 
 		if (frecencyMap) {
-				// apply the prefetched map synchronously and re-render
 			this.frecencyApplied = true;
 			this.pendingFrecencyMap = null;
 			enrichWithFrecency(this.tabs, frecencyMap);
 			this.setState({ sortingFrecency: false });
 			this.setQuery(this.state.query);
 		} else {
-				// no prefetched map available yet; fall back to the
-				// async chrome.history.search path, which runs N IPC
-				// calls but does not block the initial render
-			this.frecencyApplied = true;
-			enrichWithFrecency(this.tabs, null)
-				.then(() => {
+				// frecencyMap is bundled with prefetchedData, so it should
+				// normally be available by the time loadTabs() finishes.
+				// set a short timeout as a safety net in case the DB
+				// isn't initialized or the data didn't arrive.
+			setTimeout(() => {
+				if (!this.frecencyApplied) {
+					this.frecencyApplied = true;
 					this.setState({ sortingFrecency: false });
-					this.setQuery(this.state.query);
-				})
-				.catch((err) => {
-					console.error("[applyFrecencyAsync] enrichWithFrecency failed:", err);
-					this.setState({ sortingFrecency: false });
-				});
+				}
+			}, 200);
 		}
 	}
 
@@ -1855,16 +1866,7 @@ DEBUG && console.log("loadTabs recents (top 5):", this.recents.slice(0, 5).map(
 				this.modeStores.tabs.promise.then(() => this.setState({ selected: -1 }));
 				break;
 
-			case "prefetchedFrecencyMap":
-					// frecencyMap arrived from background after initial render;
-					// store it and apply if tabs are already loaded
-				if (!this.frecencyApplied && this.isEnhancedSearchEnabled()) {
-					this.pendingFrecencyMap = payload.frecencyMap;
-					if (this.tabs.length) {
-						this.applyFrecencyAsync();
-					}
-				}
-				break;
+
 		}
 	};
 

@@ -458,6 +458,40 @@ maxResults = 1000)
 	},
 
 
+	getFrecencyMap(
+		calculateBoost)
+	{
+		return openDB()
+			.then(database => {
+				return new Promise((resolve, reject) => {
+					const tx = database.transaction(STORE_NAME, "readonly");
+					const store = tx.objectStore(STORE_NAME);
+					const request = store.getAll();
+
+					request.onsuccess = () => {
+						const map = {};
+
+						for (const item of request.result) {
+							if (item.visitCount && item.lastVisitTime) {
+								map[item.url] = calculateBoost(item);
+							}
+						}
+
+						resolve(map);
+					};
+
+					request.onerror = () => reject(request.error);
+				});
+			})
+			.catch(error => {
+				db = null;
+				console.error("[history-db] getFrecencyMap failed:", error?.message || error);
+
+				return {};
+			});
+	},
+
+
 	getDB()
 	{
 		return openDB();

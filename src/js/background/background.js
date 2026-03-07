@@ -506,30 +506,12 @@ popupWindow.on("create", () => {
 	prefetchedStoragePromise = storage.get()
 		.catch(() => null);
 
-		// prefetch frecency data by querying chrome.history for each open tab.
-		// this runs in parallel with popup.js compilation, so the data is ready
-		// by the time the popup needs it, avoiding N IPC calls on the popup side.
+		// prefetch frecency data from IndexedDB in a single batch read.
+		// this is much faster than the previous N chrome.history.search IPC
+		// calls, since IndexedDB is local and getAll() is a single operation.
 	if (enableEnhancedSearch) {
-		prefetchedFrecencyPromise = (cachedTabs || chrome.tabs.query({}))
-			.then(tabs => {
-				const queries = tabs.map(tab =>
-					chrome.history.search({ text: tab.url, maxResults: 1, startTime: 0 })
-						.then(results => {
-							const match = results.find(r => r.url === tab.url);
-							if (match && match.visitCount && match.lastVisitTime) {
-								return { url: tab.url, boost: calculateFrecencyBoost(match) };
-							}
-							return null;
-						})
-						.catch(() => null)
-				);
-				return Promise.all(queries);
-			})
-			.then(results => {
-				const map = {};
-				results.forEach(r => r && (map[r.url] = r.boost));
-				return map;
-			})
+		prefetchedFrecencyPromise = historyDB
+			.getFrecencyMap(calculateFrecencyBoost)
 			.catch(() => null);
 	}
 });
@@ -580,14 +562,14 @@ chrome.tabs.onReplaced.addListener((newID, oldID) => {
 
 
 chrome.history.onVisited.addListener(item => {
-	if (enableUnlimitedHistory) {
+	if (enableUnlimitedHistory || enableEnhancedSearch) {
 		historyDB.addVisit(item);
 	}
 });
 
 
 chrome.history.onVisitRemoved.addListener(removed => {
-	if (enableUnlimitedHistory) {
+	if (enableUnlimitedHistory || enableEnhancedSearch) {
 		if (removed.allHistory) {
 			historyDB.clear();
 		} else if (removed.urls) {
@@ -653,14 +635,20 @@ chrome.runtime.onConnect.addListener(port => {
 const storagePromise = prefetchedStoragePromise || storage.get()
 			.catch(() => null);
 
-		Promise.all([tabsPromise, sessionsPromise, storagePromise])
-			.then(([tabs, sessions, storageData]) => {
+			// include frecencyMap in the same prefetchedData message so
+			// popup has it available from props on first render, avoiding
+			// the separate port message round-trip that caused loading flash
+		const frecencyPromise = prefetchedFrecencyPromise || Promise.resolve(null);
+
+		Promise.all([tabsPromise, sessionsPromise, storagePromise, frecencyPromise])
+			.then(([tabs, sessions, storageData, frecencyMap]) => {
 				try {
 					port.postMessage({
 						message: "prefetchedData",
 						tabs,
 						sessions,
-						storageData
+						storageData,
+						frecencyMap
 					});
 				} catch (e) {
 					// port may have been disconnected if popup closed quickly
@@ -668,27 +656,6 @@ const storagePromise = prefetchedStoragePromise || storage.get()
 			})
 			.finally(() => {
 				prefetchedStoragePromise = null;
-			});
-
-			// push frecencyMap separately so it doesn't block the main
-			// data delivery. popup can start rendering tabs immediately
-			// and apply frecency sorting when this arrives.
-		const frecencyPromise = prefetchedFrecencyPromise || Promise.resolve(null);
-
-		frecencyPromise
-			.then(frecencyMap => {
-				if (frecencyMap) {
-					try {
-						port.postMessage({
-							message: "prefetchedFrecencyMap",
-							frecencyMap
-						});
-					} catch (e) {
-						// port may have been disconnected if popup closed quickly
-					}
-				}
-			})
-			.finally(() => {
 				prefetchedFrecencyPromise = null;
 			});
 	}
@@ -807,8 +774,12 @@ chrome.runtime.onMessage.addListener(({message, ...payload}, sender, sendRespons
 			if (value) {
 				historyDB.init();
 			}
-		} else if (key == k.EnableEnhancedSearch.Key) {
+	} else if (key == k.EnableEnhancedSearch.Key) {
 			enableEnhancedSearch = value;
+
+			if (value) {
+				historyDB.init();
+			}
 		}
 	}
 
@@ -884,7 +855,7 @@ storage.set(data => {
 			enableUnlimitedHistory = settings[k.EnableUnlimitedHistory.Key];
 			enableEnhancedSearch = settings[k.EnableEnhancedSearch.Key];
 
-			if (enableUnlimitedHistory) {
+			if (enableUnlimitedHistory || enableEnhancedSearch) {
 				historyDB.init();
 			}
 		});

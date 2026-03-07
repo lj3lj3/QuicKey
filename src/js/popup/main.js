@@ -54,11 +54,9 @@ function renderApp()
 			isPopup: params.has("props"),
 			port: gPort,
 			prefetchedData: gPrefetchedData,
-			prefetchedFrecencyMap: gPrefetchedFrecencyMap,
 			...props,
 		}));
 	gPrefetchedData = null;
-	gPrefetchedFrecencyMap = null;
 }
 
 
