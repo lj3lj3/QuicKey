@@ -25,7 +25,7 @@ const DefaultSettings = {
 	[k.HidePopupBehavior.Key]: k.HidePopupBehavior.Behind,
 	[k.MarkTabsInOtherWindows.Key]: true,
 	[k.IncludeClosedTabs.Key]: true,
-	[k.ShowTabCount.Key]: false,
+	[k.ShowTabCount.Key]: k.ShowTabCount.None,
 	[k.UsePinyin.Key]: false,
 	[k.RestoreLastQuery.Key]: false,
 	[k.ShowBookmarkPaths.Key]: true,

@@ -73,6 +73,7 @@ let navigatingRecentsTimer = null;
 const NavigatingRecentsTimeout = 10000;
 let activeTab;
 let lastWindowID;
+let badgeMode = k.ShowTabCount.None;
 let lastActivatedTabId = null;
 let lastActivatedTime = 0;
 let lastUsedVersion;
@@ -192,6 +193,13 @@ function handleTabActivated({
 		lastActivatedTime = Date.now();
 DEBUG && console.log("--- handleTabActivated: addTab", tabId, "navigatingRecents:", navigatingRecents);
 		addTab(tabId);
+
+			// 当 badge 模式为 group 时，获取 tab 信息并更新 group badge
+		if (badgeMode === k.ShowTabCount.Group) {
+			chrome.tabs.get(tabId)
+				.then(tab => toolbarIcon.updateGroupBadge(tab))
+				.catch(error => tracker.exception(error));
+		}
 
 		if (ports.popup) {
 			storage.get(({tabIDs}) => {
@@ -524,6 +532,24 @@ chrome.tabs.onActivated.addListener(event => {
 });
 
 
+	// 当标签的 groupId 变化时（移入/移出 group），更新 group badge
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+	if (badgeMode === k.ShowTabCount.Group && tab.active && "groupId" in changeInfo) {
+		toolbarIcon.updateGroupBadge(tab);
+	}
+});
+
+
+	// 当 Tab Group 的名称或颜色被修改时，更新 group badge
+if (chrome.tabGroups) {
+	chrome.tabGroups.onUpdated.addListener(group => {
+		if (badgeMode === k.ShowTabCount.Group && group.id === toolbarIcon.currentGroupId) {
+			toolbarIcon.updateGroupBadge(activeTab);
+		}
+	});
+}
+
+
 chrome.tabs.onCreated.addListener(tab => {
 	toolbarIcon.updateTabCount(1);
 	invalidateTabCache();
@@ -761,7 +787,8 @@ chrome.runtime.onMessage.addListener(({message, ...payload}, sender, sendRespons
 		const {key, value} = payload;
 
 		if (key == k.ShowTabCount.Key) {
-			toolbarIcon.showTabCount(value);
+			badgeMode = value;
+			toolbarIcon.setBadgeMode(value, activeTab);
 		} else if (key == k.CurrentWindowLimitRecents.Key) {
 			currentWindowLimitRecents = value;
 		} else if (key == k.HidePopupBehavior.Key) {
@@ -846,9 +873,17 @@ storage.set(data => {
 	toolbarIcon.setColorScheme(data.colorScheme);
 
 		// pass the data we got to settings so it doesn't have to get it itself
+		// 迁移旧版布尔值设置到新的枚举值
+	if (data.settings[k.ShowTabCount.Key] === true) {
+		data.settings[k.ShowTabCount.Key] = k.ShowTabCount.Count;
+	} else if (data.settings[k.ShowTabCount.Key] === false) {
+		data.settings[k.ShowTabCount.Key] = k.ShowTabCount.None;
+	}
+
 	settings.get(data)
 		.then(settings => {
-			toolbarIcon.showTabCount(settings[k.ShowTabCount.Key]);
+			badgeMode = settings[k.ShowTabCount.Key];
+			toolbarIcon.setBadgeMode(settings[k.ShowTabCount.Key], activeTab);
 			currentWindowLimitRecents = settings[k.CurrentWindowLimitRecents.Key];
 			popupWindow.hideBehavior = settings[k.HidePopupBehavior.Key];
 			navigateRecentsWithPopup = settings[k.NavigateRecentsWithPopup.Key];

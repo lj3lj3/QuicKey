@@ -71,7 +71,10 @@ export const IncludeClosedTabs = {
 	Key: "includeClosedTabs"
 };
 export const ShowTabCount = {
-	Key: "showTabCount"
+	Key: "showTabCount",
+	None: "none",
+	Count: "count",
+	Group: "group"
 };
 export const UsePinyin = {
 	Key: "usePinyin"

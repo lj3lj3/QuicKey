@@ -42,12 +42,27 @@ const IconPaths = {
 };
 const ExtensionName = chrome.runtime.getManifest().short_name;
 
+	// Chrome Tab Group 颜色名称到十六进制的映射，与 popup 中的 group-color-* 样式保持一致
+const GroupColors = {
+	grey:   "#5f6368",
+	blue:   "#1a73e8",
+	red:    "#d93025",
+	yellow: "#f9ab00",
+	green:  "#1e8e3e",
+	pink:   "#d01884",
+	purple: "#a142f4",
+	cyan:   "#007b83",
+	orange: "#e8710a"
+};
+
 
 let isNormalIcon = true;
 let isTabCountVisible = false;
 let tabCount = 0;
 let inversionTimer;
 let colorScheme = "light";
+let badgeMode = "none";
+let currentGroupId = -1;
 
 
 function getIconsAndBadgeColor(
@@ -109,15 +124,60 @@ async function invertFor(
 }
 
 
-async function showTabCount(
-	value)
+	// 根据当前激活标签更新 group badge（显示文件夹名称和颜色）
+async function updateGroupBadge(
+	tab)
 {
-	if (isTabCountVisible !== value) {
-		isTabCountVisible = value;
-		tabCount = (await chrome.tabs.query({})).length;
+	const groupId = tab?.groupId ?? -1;
+	currentGroupId = groupId;
 
+	if (groupId <= 0) {
+		try {
+			await chrome.action.setBadgeText({ text: "" });
+		} catch (error) {
+			backgroundTracker.exception(error);
+		}
+		return;
+	}
+
+	try {
+		const group = await chrome.tabGroups.get(groupId);
+		const title = (group.title || "").slice(0, 4).trim();
+		const color = GroupColors[group.color] || GroupColors.grey;
+
+		await chrome.action.setBadgeText({ text: title });
+		await chrome.action.setBadgeBackgroundColor({ color });
+	} catch (error) {
+		backgroundTracker.exception(error);
+	}
+}
+
+
+	// 设置 badge 显示模式：none（不显示）/ count（标签数量）/ group（文件夹名称）
+async function setBadgeMode(
+	mode,
+	tab)
+{
+	badgeMode = mode;
+
+	if (mode === "count") {
+		isTabCountVisible = true;
+		tabCount = (await chrome.tabs.query({})).length;
 		await setNormalIcon();
 		await updateTabCount();
+	} else if (mode === "group") {
+		isTabCountVisible = false;
+		await setNormalIcon();
+		await updateGroupBadge(tab);
+	} else {
+		isTabCountVisible = false;
+		await setNormalIcon();
+
+		try {
+			await chrome.action.setBadgeText({ text: "" });
+		} catch (error) {
+			backgroundTracker.exception(error);
+		}
 	}
 }
 
@@ -169,9 +229,16 @@ export default {
 	setColorScheme,
 	setNormalIcon,
 	invertFor,
-	showTabCount,
+	setBadgeMode,
+	updateGroupBadge,
 	updateTabCount,
 	get isNormal() {
 		return isNormalIcon;
+	},
+	get badgeMode() {
+		return badgeMode;
+	},
+	get currentGroupId() {
+		return currentGroupId;
 	}
 };

@@ -1,5 +1,5 @@
 import React, {useContext} from "react";
-import {Checkbox} from "./controls";
+import {Checkbox, RadioGroup, RadioButton} from "./controls";
 import {Section} from "./sections";
 import NewSetting from "./new-setting";
 import {HistoryIcon, WindowIcon, IncognitoIcon, InPrivateIcon} from "@/common/icons";
@@ -133,12 +133,16 @@ export default function GeneralSection()
 			<h2>Toolbar icon</h2>
 
 			<NewSetting addedVersion={8}>
-				<Checkbox
+				<RadioGroup
 					id={k.ShowTabCount.Key}
-					label="Show the number of open tabs in a badge on the QuicKey toolbar icon"
+					label="Show in the badge on the QuicKey toolbar icon:"
 					value={settings[k.ShowTabCount.Key]}
 					onChange={onChange}
-				/>
+				>
+					<RadioButton value={k.ShowTabCount.None}  label="Nothing" />
+					<RadioButton value={k.ShowTabCount.Count} label="The number of open tabs" />
+					<RadioButton value={k.ShowTabCount.Group} label="The name and color of the current tab's group" />
+				</RadioGroup>
 			</NewSetting>
 
 
